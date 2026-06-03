@@ -24,4 +24,21 @@ class ApiService {
       return [];
     }
   }
+  static Future<List<dynamic>> getAlerts() async {
+
+    print("Calling alerts API");
+
+    final response =
+    await http.get(Uri.parse("$baseUrl/alerts"));
+
+    print("Status: ${response.statusCode}");
+    print("Body: ${response.body}");
+
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body);
+      return data["alerts"];
+    }
+
+    return [];
+  }
 }

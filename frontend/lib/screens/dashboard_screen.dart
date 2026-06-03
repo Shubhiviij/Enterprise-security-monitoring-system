@@ -1,3 +1,4 @@
+import 'package:enterprise_security_monitor/screens/alert_screen.dart';
 import 'package:flutter/material.dart';
 import '../widgets/stat_card.dart';
 import '../widgets/alert_tile.dart';
@@ -63,9 +64,16 @@ class DashboardScreen extends StatelessWidget {
               },
             ),
 
-            const ListTile(
-              leading: Icon(Icons.warning),
-              title: Text("Alerts"),
+            ListTile(
+              leading: const Icon(Icons.warning),
+              title: const Text("Alerts"),
+              onTap: () {
+                Navigator.push(
+                  context, MaterialPageRoute(
+                    builder: (_) => const AlertsScreen(),
+                  ),
+                );
+              },
             ),
 
             const ListTile(
