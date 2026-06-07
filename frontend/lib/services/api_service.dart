@@ -25,14 +25,8 @@ class ApiService {
     }
   }
   static Future<List<dynamic>> getAlerts() async {
-
-    print("Calling alerts API");
-
     final response =
     await http.get(Uri.parse("$baseUrl/alerts"));
-
-    print("Status: ${response.statusCode}");
-    print("Body: ${response.body}");
 
     if (response.statusCode == 200) {
       final data = jsonDecode(response.body);
@@ -41,4 +35,37 @@ class ApiService {
 
     return [];
   }
+  static Future<Map<String, dynamic>> getStats() async {
+
+    final response =
+    await http.get(Uri.parse("$baseUrl/stats"));
+
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    }
+
+    return {};
+  }
+  static Future<Map<String, dynamic>> getSeverity() async {
+    final response =
+    await http.get(Uri.parse("$baseUrl/severity"));
+
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    }
+
+    return {};
+  }
+  static Future<List<dynamic>> getThreats() async {
+    final response =
+    await http.get(Uri.parse("$baseUrl/threats"));
+
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body);
+      return data["threats"];
+    }
+
+    return [];
+  }
+
 }

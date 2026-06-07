@@ -1,8 +1,8 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 import subprocess
-app = FastAPI()
 
+app = FastAPI()
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -15,16 +15,19 @@ app.add_middleware(
 def home():
     return {"status": "Kali Backend Running"}
 
-@app.get("/logs")
-def get_logs():
+def read_logs():
     result = subprocess.run(
-        ["journalctl", "-n", "20", "--no-pager"],
+        ["journalctl", "-n", "100", "--no-pager"],
         capture_output=True,
         text=True
     )
 
+    return result.stdout.splitlines()
+
+@app.get("/logs")
+def get_logs():
     return {
-        "logs": result.stdout.splitlines()
+        "logs": read_logs()
     }
 
 @app.get("/alerts")
@@ -76,33 +79,80 @@ def get_alerts():
         })
 
     return {"alerts": alerts}
+
 @app.get("/stats")
 def get_stats():
 
-    alerts = get_alerts()["alerts"]
+    logs = read_logs()
+
+    threats = len(logs)
+
+    alerts = 0
+    high_risk = 0
+
+    for log in logs:
+
+        if "docker" in log.lower():
+            alerts += 1
+
+        if "failed" in log.lower():
+            high_risk += 1
+
+    return {
+        "threats": threats,
+        "alerts": alerts,
+        "users": 120,
+        "high_risk": high_risk
+    }
+@app.get("/severity")
+def get_severity():
+
+    logs = read_logs()
 
     high = 0
     medium = 0
     low = 0
 
-    for alert in alerts:
-        if alert["severity"] == "HIGH":
+    for log in logs:
+
+        log = log.lower()
+
+        if "failed" in log:
             high += 1
-        elif alert["severity"] == "MEDIUM":
+
+        elif "docker" in log:
             medium += 1
-        elif alert["severity"] == "LOW":
+
+        elif "network" in log:
             low += 1
 
     return {
-        "threats": high + medium + low,
-        "high_risk": high,
-        "alerts": len(alerts),
-        "users": 120
+        "high": high,
+        "medium": medium,
+        "low": low
     }
+@app.get("/threats")
+def get_threats():
 
-
-
-
-
-
-
+    return {
+        "threats": [
+            {
+                "cve": "CVE-2025-1234",
+                "title": "Apache HTTP Server RCE",
+                "cvss": 9.8,
+                "severity": "CRITICAL"
+            },
+            {
+                "cve": "CVE-2025-5678",
+                "title": "Linux Kernel Privilege Escalation",
+                "cvss": 8.4,
+                "severity": "HIGH"
+            },
+            {
+                "cve": "CVE-2025-7890",
+                "title": "Docker Container Escape",
+                "cvss": 6.7,
+                "severity": "MEDIUM"
+            }
+        ]
+    }
