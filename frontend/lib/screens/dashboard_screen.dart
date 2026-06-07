@@ -8,6 +8,7 @@ import '../widgets/stat_card.dart';
 import '../widgets/alert_tile.dart';
 import '../widgets/chart_card.dart';
 import 'live_logs_screen.dart';
+import 'phishing_scanner_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -141,9 +142,20 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 );
               },
             ),
-            const ListTile(
-              leading: Icon(Icons.link),
-              title: Text("Phishing Scanner"),
+            ListTile(
+              leading: const Icon(Icons.link),
+              title: const Text("Phishing Scanner"),
+              onTap: () {
+                Navigator.pop(context);
+
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) =>
+                    const PhishingScannerScreen(),
+                  ),
+                );
+              },
             ),
             const ListTile(
               leading: Icon(Icons.bar_chart),

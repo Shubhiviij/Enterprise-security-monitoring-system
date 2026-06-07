@@ -67,5 +67,22 @@ class ApiService {
 
     return [];
   }
+  static Future<Map<String, dynamic>> scanUrl(String url) async {
+    final response = await http.post(
+      Uri.parse("$baseUrl/scan-url"),
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: jsonEncode({
+        "url": url,
+      }),
+    );
+
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    }
+
+    return {};
+  }
 
 }
