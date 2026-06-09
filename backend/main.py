@@ -1,6 +1,8 @@
+└─# cat main.py 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 import subprocess
+from pydantic import BaseModel
 
 app = FastAPI()
 app.add_middleware(
@@ -10,6 +12,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+class URLRequest(BaseModel):
+    url: str
 
 @app.get("/")
 def home():
@@ -153,6 +157,89 @@ def get_threats():
                 "title": "Docker Container Escape",
                 "cvss": 6.7,
                 "severity": "MEDIUM"
-            }
+           }
         ]
     }
+
+
+@app.post("/scan-url")
+def scan_url(data: URLRequest):
+    url = data.url.lower()
+    reasons = []
+    score = 0
+
+    suspicious_keywords = [
+        "login", "verify", "update", "secure",
+        "banking", "account", "password"
+    ]
+
+    for keyword in suspicious_keywords:
+        if keyword in url:
+            score += 1
+            reasons.append({
+                "type": "keyword",
+                "description": f"Suspicious keyword detected: '{keyword}'"
+            })
+
+    if "@" in url:
+        score += 2
+        reasons.append({
+            "type": "symbol",
+            "description": "URL contains '@' symbol — common in phishing links"
+        })
+
+    if url.count("-") > 2:
+        score += 2
+        reasons.append({
+            "type": "structure",
+            "description": f"Excessive hyphens ({url.count('-')}) — typical of spoofed domains"
+        })
+
+    # NEW: Check for IP address instead of domain
+    import re
+    if re.search(r'\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}', url):
+        score += 3
+        reasons.append({
+            "type": "ip",
+            "description": "URL uses raw IP address instead of domain name"
+        })
+
+    # NEW: Check for excessive subdomains
+    domain_part = url.split("/")[2] if "/" in url else url
+    if domain_part.count(".") > 3:
+        score += 1
+        reasons.append({
+            "type": "structure",
+            "description": "Too many subdomains — suspicious domain structure"
+        })
+
+    # NEW: Check for misleading HTTPS
+    if "https" in url and any(k in url for k in ["login", "secure", "verify"]):
+        reasons.append({
+            "type": "info",
+            "description": "HTTPS does not guarantee safety — phishing sites use it too"
+        })
+
+    max_score = 9
+    normalized = round((score / max_score) * 100)
+    normalized = min(normalized, 100)
+
+    if score >= 4:
+        verdict = "PHISHING"
+        risk = "HIGH"
+    elif score >= 2:
+        verdict = "SUSPICIOUS"
+        risk = "MEDIUM"
+    else:
+        verdict = "SAFE"
+        risk = "LOW"
+
+    return {
+        "url": data.url,
+        "verdict": verdict,
+        "risk": risk,
+        "score": score,
+        "normalized_score": normalized,
+        "reasons": reasons
+    }
+               

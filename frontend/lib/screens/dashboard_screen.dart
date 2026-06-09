@@ -10,6 +10,7 @@ import '../widgets/chart_card.dart';
 import 'live_logs_screen.dart';
 import 'phishing_scanner_screen.dart';
 
+
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
 
