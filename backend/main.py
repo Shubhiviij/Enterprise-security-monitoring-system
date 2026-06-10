@@ -1,4 +1,4 @@
-└─# cat main.py 
+import requests
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 import subprocess
@@ -135,32 +135,50 @@ def get_severity():
         "medium": medium,
         "low": low
     }
+
 @app.get("/threats")
 def get_threats():
 
-    return {
-        "threats": [
-            {
-                "cve": "CVE-2025-1234",
-                "title": "Apache HTTP Server RCE",
-                "cvss": 9.8,
-                "severity": "CRITICAL"
-            },
-            {
-                "cve": "CVE-2025-5678",
-                "title": "Linux Kernel Privilege Escalation",
-                "cvss": 8.4,
-                "severity": "HIGH"
-            },
-            {
-                "cve": "CVE-2025-7890",
-                "title": "Docker Container Escape",
-                "cvss": 6.7,
-                "severity": "MEDIUM"
-           }
-        ]
+    url = "https://services.nvd.nist.gov/rest/json/cves/2.0"
+
+    params = {
+             "resultsPerPage": 10
     }
 
+    try:
+        response = requests.get(
+            url,
+            params=params,
+            timeout=10
+        )
+
+        print(response.status_code)
+        print("STATUS:", response.status_code)
+        print("URL:", response.url)
+        print("BODY:", response.text)
+        data = response.json()
+
+        threats = []
+
+        for item in data["vulnerabilities"]:
+
+            cve = item["cve"]
+
+            cve_id = cve["id"]
+
+            threats.append({
+                "cve": cve_id
+            })
+
+        return {
+            "threats": threats
+        }
+
+    except Exception as e:
+        return {
+            "error": str(e),
+            "threats": []
+        }
 
 @app.post("/scan-url")
 def scan_url(data: URLRequest):
@@ -242,4 +260,4 @@ def scan_url(data: URLRequest):
         "normalized_score": normalized,
         "reasons": reasons
     }
-               
+          
