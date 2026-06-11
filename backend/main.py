@@ -139,35 +139,25 @@ def get_severity():
 @app.get("/threats")
 def get_threats():
 
-    url = "https://services.nvd.nist.gov/rest/json/cves/2.0"
-
-    params = {
-             "resultsPerPage": 10
-    }
+    url = "https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json"
 
     try:
-        response = requests.get(
-            url,
-            params=params,
-            timeout=10
-        )
 
-        print(response.status_code)
-        print("STATUS:", response.status_code)
-        print("URL:", response.url)
-        print("BODY:", response.text)
+        response = requests.get(url, timeout=10)
+
         data = response.json()
 
         threats = []
 
-        for item in data["vulnerabilities"]:
-
-            cve = item["cve"]
-
-            cve_id = cve["id"]
+        for vuln in data["vulnerabilities"][:20]:
 
             threats.append({
-                "cve": cve_id
+                "cve": vuln["cveID"],
+                "title": vuln["vulnerabilityName"],
+                "vendor": vuln["vendorProject"],
+                "product": vuln["product"],
+                "severity": "HIGH",
+                "dateAdded": vuln["dateAdded"]
             })
 
         return {
@@ -175,6 +165,7 @@ def get_threats():
         }
 
     except Exception as e:
+
         return {
             "error": str(e),
             "threats": []
@@ -260,4 +251,4 @@ def scan_url(data: URLRequest):
         "normalized_score": normalized,
         "reasons": reasons
     }
-          
+        

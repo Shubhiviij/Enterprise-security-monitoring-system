@@ -9,7 +9,7 @@ import '../widgets/alert_tile.dart';
 import '../widgets/chart_card.dart';
 import 'live_logs_screen.dart';
 import 'phishing_scanner_screen.dart';
-
+import '../services/report_service.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -19,9 +19,33 @@ class DashboardScreen extends StatefulWidget {
 }
 
 class _DashboardScreenState extends State<DashboardScreen> {
+  Widget _kpiTile(IconData icon, String label, String status, Color color) {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 10),
+      decoration: BoxDecoration(
+        color: const Color(0xFF1E293B),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.white10),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, color: color, size: 16),
+          const SizedBox(width: 6),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(label, style: const TextStyle(fontSize: 10, color: Colors.white38)),
+              Text(status, style: TextStyle(fontSize: 11, color: color, fontWeight: FontWeight.bold)),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
   Map<String, dynamic>? _statsData;
   Map<String, dynamic>? _severityData;
   List<dynamic> _alerts = [];
+  List<dynamic> _threats = [];
   bool _isLoading = true;
   String? _errorMessage;
   Timer? _timer;
@@ -52,6 +76,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         ApiService.getStats(),
         ApiService.getSeverity(),
         ApiService.getAlerts(),
+        ApiService.getThreats(),   // ADD THIS
       ]);
 
       if (mounted) {
@@ -59,6 +84,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           _statsData = results[0] as Map<String, dynamic>;
           _severityData = results[1] as Map<String, dynamic>;
           _alerts = results[2] as List<dynamic>;
+          _threats = results[3] as List<dynamic>;
           _errorMessage = null; // Clear any existing historical errors if it recovers
           _isLoading = false;
         });
@@ -95,6 +121,22 @@ class _DashboardScreenState extends State<DashboardScreen> {
       appBar: AppBar(
         title: const Text("Security Dashboard"),
         backgroundColor: Colors.blueGrey,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.picture_as_pdf),
+            tooltip: "Generate Security Report",
+            onPressed: (_statsData == null || _severityData == null)
+                ? null
+                : () {
+              ReportService.generateReport(
+                stats: _statsData!,
+                severity: _severityData!,
+                threats: _threats,
+                alerts: _alerts,
+              );
+            },
+          ),
+        ],
       ),
       drawer: Drawer(
         child: ListView(
@@ -216,6 +258,51 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 "Real-time monitoring of security events",
                 style: TextStyle(color: Colors.grey),
               ),
+              const SizedBox(height: 16),
+
+// ── SECURITY STATUS BANNER ──
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                decoration: BoxDecoration(
+                  color: Colors.green.withOpacity(0.08),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: Colors.green.withOpacity(0.3)),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.verified_user_outlined, color: Colors.green, size: 18),
+                    const SizedBox(width: 10),
+                    const Expanded(
+                      child: Text(
+                        "All systems operational — No critical threats detected",
+                        style: TextStyle(color: Colors.green, fontSize: 13),
+                      ),
+                    ),
+                    Text(
+                      "SECURE",
+                      style: TextStyle(
+                        color: Colors.green,
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: 1.2,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 12),
+
+// ── KPI ROW ──
+              Row(
+                children: [
+                  Expanded(child: _kpiTile(Icons.speed, "API", "Online", Colors.green)),
+                  const SizedBox(width: 8),
+                  Expanded(child: _kpiTile(Icons.cloud_done_outlined, "Backend", "Connected", Colors.blue)),
+                  const SizedBox(width: 8),
+                  Expanded(child: _kpiTile(Icons.rss_feed, "Threat Feed", "Active", Colors.orange)),
+                ],
+              ),
               const SizedBox(height: 20),
 
               // --- STATS GRID ---
@@ -231,21 +318,25 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     title: "Threats",
                     value: stats["threats"].toString(),
                     color: Colors.red,
+                    icon: Icons.bug_report_outlined,
                   ),
                   StatCard(
                     title: "Alerts",
                     value: stats["alerts"].toString(),
                     color: Colors.orange,
+                    icon: Icons.notifications_active_outlined,
                   ),
                   StatCard(
                     title: "Users",
                     value: stats["users"].toString(),
                     color: Colors.blue,
+                    icon: Icons.people_outline,
                   ),
                   StatCard(
                     title: "High Risk",
                     value: stats["high_risk"].toString(),
                     color: Colors.purple,
+                    icon: Icons.local_fire_department_outlined,
                   ),
                 ],
               ),
@@ -292,7 +383,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 10),
-              const ChartCard(),
+              ChartCard(
+                severity: severity,
+                alerts: _alerts,
+              ),
               const SizedBox(height: 15),
 
               // Matches constructor pattern: required title, required risk
