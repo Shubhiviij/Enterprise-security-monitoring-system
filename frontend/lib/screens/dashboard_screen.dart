@@ -6,10 +6,11 @@ import 'package:enterprise_security_monitor/services/api_service.dart';
 import '../widgets/severity_card.dart';
 import '../widgets/stat_card.dart';
 import '../widgets/alert_tile.dart';
-import '../widgets/chart_card.dart';
 import 'live_logs_screen.dart';
+import 'package:intl/intl.dart';
 import 'phishing_scanner_screen.dart';
 import '../services/report_service.dart';
+import '../widgets/threat_trend_chart.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -50,6 +51,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
   String? _errorMessage;
   Timer? _timer;
 
+  // Track precise data sync time
+  String _lastUpdated = "--:--:--";
+
   @override
   void initState() {
     super.initState();
@@ -76,7 +80,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         ApiService.getStats(),
         ApiService.getSeverity(),
         ApiService.getAlerts(),
-        ApiService.getThreats(),   // ADD THIS
+        ApiService.getThreats(),
       ]);
 
       if (mounted) {
@@ -87,6 +91,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
           _threats = results[3] as List<dynamic>;
           _errorMessage = null; // Clear any existing historical errors if it recovers
           _isLoading = false;
+
+          // Timestamp captures precisely when the engine pushes fresh data mutations
+          _lastUpdated =
+              DateFormat('HH:mm:ss').format(DateTime.now());
         });
       }
     } catch (e) {
@@ -95,9 +103,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
           // Optimized UX: Only show full-screen error if initial load completely fails
           if (_statsData == null || _severityData == null) {
             _errorMessage = "Failed to sync security data: $e";
-          } else {
-            // Optional: You could trigger a ScaffoldMessenger SnackBar here
-            // to warn the user that data refresh failed, without destroying the UI.
           }
           _isLoading = false;
         });
@@ -117,20 +122,33 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final stats = _statsData ?? {"threats": 0, "alerts": 0, "users": 0, "high_risk": 0};
     final severity = _severityData ?? {"high": 0, "medium": 0, "low": 0};
 
+    // Dynamic state computation for the top banner
+    final hasCriticalThreats = (severity["high"] ?? 0) > 0;
+
     return Scaffold(
       appBar: AppBar(
         title: const Text("Security Dashboard"),
         backgroundColor: Colors.blueGrey,
         actions: [
+          // Anti-spam configuration built into manual sync interaction triggers
+          IconButton(
+            icon: const Icon(Icons.refresh),
+            tooltip: "Refresh Dashboard Data",
+            onPressed: _isLoading
+                ? null
+                : () {
+              _fetchData(isInitialLoad: false);
+            },
+          ),
           IconButton(
             icon: const Icon(Icons.picture_as_pdf),
             tooltip: "Generate Security Report",
-            onPressed: (_statsData == null || _severityData == null)
+            onPressed: _isLoading
                 ? null
                 : () {
               ReportService.generateReport(
-                stats: _statsData!,
-                severity: _severityData!,
+                stats: stats,
+                severity: severity,
                 threats: _threats,
                 alerts: _alerts,
               );
@@ -190,13 +208,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
               title: const Text("Phishing Scanner"),
               onTap: () {
                 Navigator.pop(context);
-
                 Navigator.push(
                   context,
-                  MaterialPageRoute(
-                    builder: (_) =>
-                    const PhishingScannerScreen(),
-                  ),
+                  MaterialPageRoute(builder: (_) => const PhishingScannerScreen()),
                 );
               },
             ),
@@ -214,12 +228,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
               title: const Text("Threat Intelligence"),
               onTap: () {
                 Navigator.pop(context);
-
                 Navigator.push(
                   context,
-                  MaterialPageRoute(
-                    builder: (_) => const ThreatIntelScreen(),
-                  ),
+                  MaterialPageRoute(builder: (_) => const ThreatIntelScreen()),
                 );
               },
             ),
@@ -239,7 +250,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           child: Text(
             _errorMessage!,
             style: const TextStyle(color: Colors.red, fontSize: 16),
-            textAlign: TextAlign.center, // <-- Fixed here
+            textAlign: TextAlign.center,
           ),
         ),
       )
@@ -254,35 +265,64 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 5),
-              const Text(
-                "Real-time monitoring of security events",
-                style: TextStyle(color: Colors.grey),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text(
+                    "Real-time monitoring of security events",
+                    style: TextStyle(color: Colors.grey),
+                  ),
+                  Text(
+                    "Last Updated: $_lastUpdated",
+                    style: const TextStyle(
+                      color: Colors.grey,
+                      fontSize: 12,
+                    ),
+                  ),
+                ],
               ),
               const SizedBox(height: 16),
 
-// ── SECURITY STATUS BANNER ──
+              // ── SECURITY STATUS BANNER (DYNAMIC) ──
               Container(
                 width: double.infinity,
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                 decoration: BoxDecoration(
-                  color: Colors.green.withOpacity(0.08),
+                  color: hasCriticalThreats
+                      ? Colors.red.withOpacity(0.08)
+                      : Colors.green.withOpacity(0.08),
                   borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: Colors.green.withOpacity(0.3)),
+                  border: Border.all(
+                    color: hasCriticalThreats
+                        ? Colors.red.withOpacity(0.3)
+                        : Colors.green.withOpacity(0.3),
+                  ),
                 ),
                 child: Row(
                   children: [
-                    const Icon(Icons.verified_user_outlined, color: Colors.green, size: 18),
+                    Icon(
+                      hasCriticalThreats
+                          ? Icons.gpp_bad_outlined
+                          : Icons.verified_user_outlined,
+                      color: hasCriticalThreats ? Colors.red : Colors.green,
+                      size: 18,
+                    ),
                     const SizedBox(width: 10),
-                    const Expanded(
+                    Expanded(
                       child: Text(
-                        "All systems operational — No critical threats detected",
-                        style: TextStyle(color: Colors.green, fontSize: 13),
+                        hasCriticalThreats
+                            ? "Critical threats detected — Immediate isolation required"
+                            : "All systems operational — No critical threats detected",
+                        style: TextStyle(
+                          color: hasCriticalThreats ? Colors.red : Colors.green,
+                          fontSize: 13,
+                        ),
                       ),
                     ),
                     Text(
-                      "SECURE",
+                      hasCriticalThreats ? "CRITICAL" : "SECURE",
                       style: TextStyle(
-                        color: Colors.green,
+                        color: hasCriticalThreats ? Colors.red : Colors.green,
                         fontSize: 11,
                         fontWeight: FontWeight.bold,
                         letterSpacing: 1.2,
@@ -293,7 +333,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
               ),
               const SizedBox(height: 12),
 
-// ── KPI ROW ──
+              // ── KPI ROW ──
               Row(
                 children: [
                   Expanded(child: _kpiTile(Icons.speed, "API", "Online", Colors.green)),
@@ -383,13 +423,36 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 10),
-              ChartCard(
-                severity: severity,
-                alerts: _alerts,
-              ),
-              const SizedBox(height: 15),
 
-              // Matches constructor pattern: required title, required risk
+              // --- ENTERPRISE THREAT TREND CARD CONTAINER ---
+              Container(
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF1A2332),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      "Threat Trend Analysis",
+                      style: TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                    ThreatTrendChart(
+                      high: severity["high"],
+                      medium: severity["medium"],
+                      low: severity["low"],
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 25),
+
+              // --- RECENT ALERTS ---
               const Text(
                 "Recent Alerts",
                 style: TextStyle(
@@ -397,7 +460,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   fontWeight: FontWeight.bold,
                 ),
               ),
-
               const SizedBox(height: 10),
               if (_alerts.isEmpty)
                 const Text("No alerts detected"),
