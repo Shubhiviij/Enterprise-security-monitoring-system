@@ -3,11 +3,13 @@ import 'package:enterprise_security_monitor/screens/threat_intel_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:enterprise_security_monitor/screens/alert_screen.dart';
 import 'package:enterprise_security_monitor/services/api_service.dart';
+import '../services/auth_session.dart';
 import '../widgets/severity_card.dart';
 import '../widgets/stat_card.dart';
 import '../widgets/alert_tile.dart';
 import 'live_logs_screen.dart';
 import 'package:intl/intl.dart';
+import 'login_screen.dart';
 import 'phishing_scanner_screen.dart';
 import '../services/report_service.dart';
 import '../widgets/threat_trend_chart.dart';
@@ -158,38 +160,51 @@ class _DashboardScreenState extends State<DashboardScreen> {
       ),
       drawer: Drawer(
         child: ListView(
+          padding: EdgeInsets.zero,
           children: [
-            const DrawerHeader(
-              decoration: BoxDecoration(color: Colors.blueGrey),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Icon(Icons.security, size: 50, color: Colors.white),
-                  SizedBox(height: 10),
-                  Text(
-                    "Enterprise Security",
-                    style: TextStyle(
-                      fontSize: 22,
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold,
-                    ),
+            // ── CUSTOM OPERATOR PROFILE HEADER ──
+            UserAccountsDrawerHeader(
+              decoration: const BoxDecoration(color: Colors.blueGrey),
+              currentAccountPicture: CircleAvatar(
+                backgroundColor: const Color(0xFF0F172A),
+                child: Icon(
+                  AuthSession().isAdmin ? Icons.admin_panel_settings : Icons.security,
+                  size: 36,
+                  color: AuthSession().isAdmin ? Colors.red.shade400 : Colors.blue.shade400,
+                ),
+              ),
+              accountName: Text(
+                AuthSession().username?.toUpperCase() ?? "UNKNOWN OPERATOR",
+                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+              ),
+              accountEmail: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                decoration: BoxDecoration(
+                  color: Colors.black26,
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: Text(
+                  AuthSession().role ?? "Security Analyst",
+                  style: TextStyle(
+                    color: AuthSession().isAdmin ? Colors.red.shade300 : Colors.green.shade300,
+                    fontSize: 11,
+                    fontWeight: FontWeight.bold,
                   ),
-                ],
+                ),
               ),
             ),
-            const ListTile(
-              leading: Icon(Icons.dashboard),
-              title: Text("Dashboard"),
+
+            ListTile(
+              leading: const Icon(Icons.dashboard),
+              title: const Text("Dashboard"),
+              onTap: () => Navigator.pop(context),
             ),
             ListTile(
               leading: const Icon(Icons.storage),
               title: const Text("Live Logs"),
               onTap: () {
                 Navigator.pop(context);
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const LiveLogsScreen()),
-                );
+                Navigator.push(context, MaterialPageRoute(builder: (_) => const LiveLogsScreen()));
               },
             ),
             ListTile(
@@ -197,10 +212,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
               title: const Text("Alerts"),
               onTap: () {
                 Navigator.pop(context);
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const AlertsScreen()),
-                );
+                Navigator.push(context, MaterialPageRoute(builder: (_) => const AlertsScreen()));
               },
             ),
             ListTile(
@@ -208,35 +220,49 @@ class _DashboardScreenState extends State<DashboardScreen> {
               title: const Text("Phishing Scanner"),
               onTap: () {
                 Navigator.pop(context);
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const PhishingScannerScreen()),
-                );
+                Navigator.push(context, MaterialPageRoute(builder: (_) => const PhishingScannerScreen()));
               },
             ),
-            const ListTile(
-              leading: Icon(Icons.bar_chart),
-              title: Text("Reports"),
-            ),
-            const ListTile(
-              leading: Icon(Icons.settings),
-              title: Text("Settings"),
-            ),
-            const Divider(),
             ListTile(
               leading: const Icon(Icons.public),
               title: const Text("Threat Intelligence"),
               onTap: () {
                 Navigator.pop(context);
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const ThreatIntelScreen()),
-                );
+                Navigator.push(context, MaterialPageRoute(builder: (_) => const ThreatIntelScreen()));
               },
             ),
-            const ListTile(
-              leading: Icon(Icons.logout),
-              title: Text("Logout"),
+            const Divider(),
+
+            // ── ROLE-BASED ACCESS CONTROL ON SETTINGS ──
+            ListTile(
+              leading: const Icon(Icons.settings),
+              title: const Text("Settings"),
+              trailing: AuthSession().isAdmin
+                  ? null
+                  : const Icon(Icons.lock_outline, size: 16, color: Colors.grey),
+              subtitle: AuthSession().isAdmin
+                  ? null
+                  : const Text("Requires Administrator rights", style: TextStyle(fontSize: 10)),
+              onTap: AuthSession().isAdmin
+                  ? () {
+                Navigator.pop(context);
+                // TODO: Navigate to administrative panel screen
+              }
+                  : null, // Disables touch interactions for Analysts
+            ),
+
+            // ── FUNCTIONAL LOGOUT TERMINATION CHECKPOINT ──
+            ListTile(
+              leading: const Icon(Icons.logout, color: Colors.redAccent),
+              title: const Text("Logout", style: TextStyle(color: Colors.redAccent)),
+              onTap: () {
+                AuthSession().clearSession(); // Terminate local token parameters
+                Navigator.pushAndRemoveUntil(
+                  context,
+                  MaterialPageRoute(builder: (_) => const LoginScreen()),
+                      (route) => false, // Clears navigation history stack to prevent back-button access
+                );
+              },
             ),
           ],
         ),

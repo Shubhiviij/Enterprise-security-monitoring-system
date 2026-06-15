@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'screens/dashboard_screen.dart';
+import 'screens/login_screen.dart'; // Route targeted here now
 
 void main() {
   runApp(const SecurityApp());
@@ -12,7 +12,6 @@ class SecurityApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-
       theme: ThemeData.dark().copyWith(
         scaffoldBackgroundColor: const Color(0xFF0F172A),
         cardColor: const Color(0xFF1E293B),
@@ -21,8 +20,7 @@ class SecurityApp extends StatelessWidget {
           centerTitle: true,
         ),
       ),
-
-      home: const DashboardScreen(),
+      home: const LoginScreen(), // Set gateway checkpoint here
     );
   }
 }
