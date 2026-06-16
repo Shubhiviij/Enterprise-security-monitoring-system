@@ -7,6 +7,7 @@ import '../services/auth_session.dart';
 import '../widgets/severity_card.dart';
 import '../widgets/stat_card.dart';
 import '../widgets/alert_tile.dart';
+import 'alert_details_screen.dart';
 import 'live_logs_screen.dart';
 import 'package:intl/intl.dart';
 import 'login_screen.dart';
@@ -479,20 +480,30 @@ class _DashboardScreenState extends State<DashboardScreen> {
               const SizedBox(height: 25),
 
               // --- RECENT ALERTS ---
+              // Locate this block at the very bottom of lib/screens/dashboard_screen.dart
               const Text(
                 "Recent Alerts",
-                style: TextStyle(
-                  fontSize: 22,
-                  fontWeight: FontWeight.bold,
-                ),
+                style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 10),
               if (_alerts.isEmpty)
                 const Text("No alerts detected"),
+
+              // ── WRAPPING EACH ALERTTILE WITH TACTILE NAV INTERACTION ──
               ..._alerts.map(
-                    (alert) => AlertTile(
-                  title: alert["message"],
-                  risk: alert["severity"],
+                    (alert) => GestureDetector(
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => AlertDetailsScreen(alert: alert),
+                      ),
+                    );
+                  },
+                  child: AlertTile(
+                    title: alert["title"] ?? alert["message"], // Handles both title layouts safely
+                    risk: alert["severity"],
+                  ),
                 ),
               ),
             ],

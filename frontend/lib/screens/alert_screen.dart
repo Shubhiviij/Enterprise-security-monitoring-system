@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../services/api_service.dart';
+import 'alert_details_screen.dart';
 
 class AlertsScreen extends StatefulWidget {
   const AlertsScreen({super.key});
@@ -67,6 +68,17 @@ class _AlertsScreenState extends State<AlertsScreen> {
                     color: getColor(alert["severity"]),
                   ),
                   title: Text(alert["message"]),
+
+                  onTap: () {
+              Navigator.push(
+              context,
+              MaterialPageRoute(
+              builder: (_) => AlertDetailsScreen(
+              alert: alert,
+              ),
+              ),
+              );
+              },
                   subtitle:
                   Text(alert["severity"]),
                 ),
