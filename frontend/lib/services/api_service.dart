@@ -93,4 +93,20 @@ class ApiService {
       return {};
     }
   }
+  static Future<bool> updateAlertStatus(String alertId, String newStatus) async {
+    try {
+      final response = await http.post(
+        Uri.parse("$baseUrl/alerts/update-status"),
+        headers: {"Content-Type": "application/json"},
+        body: jsonEncode({
+          "alert_id": alertId,
+          "status": newStatus,
+        }),
+      );
+      return response.statusCode == 200;
+    } catch (e) {
+      print("Failed to sync incident triage update status: $e");
+      return false;
+    }
+  }
 }

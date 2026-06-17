@@ -1,9 +1,12 @@
+import 'dart:convert';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 import 'package:intl/intl.dart';
 
 class ReportService {
+
+  // ── GENERATE PDF REPORT ──
   static Future<void> generateReport({
     required Map<String, dynamic> stats,
     required Map<String, dynamic> severity,
@@ -27,8 +30,7 @@ class ReportService {
           bold: fontBold,
         ),
         build: (context) => [
-
-          // ── HEADER ──
+          // Header
           pw.Container(
             padding: const pw.EdgeInsets.all(16),
             decoration: const pw.BoxDecoration(
@@ -59,7 +61,7 @@ class ReportService {
 
           pw.SizedBox(height: 20),
 
-          // ── SECURITY SUMMARY ──
+          // Security Summary
           pw.Text(
             "Security Summary",
             style: pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.bold),
@@ -79,7 +81,7 @@ class ReportService {
 
           pw.SizedBox(height: 24),
 
-          // ── SEVERITY BREAKDOWN ──
+          // Severity Breakdown
           pw.Text(
             "Severity Breakdown",
             style: pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.bold),
@@ -98,7 +100,7 @@ class ReportService {
 
           pw.SizedBox(height: 24),
 
-          // ── LATEST THREAT INTELLIGENCE ──
+          // Latest Threat Intelligence
           pw.Text(
             "Latest Threat Intelligence",
             style: pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.bold),
@@ -111,14 +113,13 @@ class ReportService {
           else
             pw.Table(
               border: pw.TableBorder.all(color: PdfColors.grey400, width: 0.5),
-              columnWidths: {
-                0: const pw.FlexColumnWidth(2),
-                1: const pw.FlexColumnWidth(4),
-                2: const pw.FlexColumnWidth(2),
-                3: const pw.FlexColumnWidth(2),
+              columnWidths: const {
+                0: pw.FlexColumnWidth(2),
+                1: pw.FlexColumnWidth(4),
+                2: pw.FlexColumnWidth(2),
+                3: pw.FlexColumnWidth(2),
               },
               children: [
-                // Table header
                 pw.TableRow(
                   decoration: const pw.BoxDecoration(color: PdfColors.blueGrey100),
                   children: [
@@ -128,7 +129,6 @@ class ReportService {
                     _tableHeader("Severity"),
                   ],
                 ),
-                // Table rows
                 ...threats.take(10).map((threat) {
                   return pw.TableRow(
                     children: [
@@ -147,7 +147,7 @@ class ReportService {
 
           pw.SizedBox(height: 24),
 
-          // ── RECENT ALERTS ──
+          // Recent Alerts
           pw.Text(
             "Recent Alerts",
             style: pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.bold),
@@ -160,9 +160,9 @@ class ReportService {
           else
             pw.Table(
               border: pw.TableBorder.all(color: PdfColors.grey400, width: 0.5),
-              columnWidths: {
-                0: const pw.FlexColumnWidth(5),
-                1: const pw.FlexColumnWidth(2),
+              columnWidths: const {
+                0: pw.FlexColumnWidth(5),
+                1: pw.FlexColumnWidth(2),
               },
               children: [
                 pw.TableRow(
@@ -188,7 +188,7 @@ class ReportService {
 
           pw.SizedBox(height: 32),
 
-          // ── FOOTER ──
+          // Footer
           pw.Divider(),
           pw.SizedBox(height: 8),
           pw.Row(
@@ -213,8 +213,46 @@ class ReportService {
     );
   }
 
-  // ── HELPERS ──
+  // ── EXPORT RAW DIAGNOSTIC TEXT MANIFEST ──
+  static Future<void> exportSingleAlertRaw(Map<String, dynamic> alert) async {
+    final String timestamp = DateFormat('yyyyMMdd_HHmmss').format(DateTime.now());
+    final String fileName = "INCIDENT_REPORT_${alert["id"] ?? 'ALT'}_$timestamp.txt";
 
+    final String content = """
+======================================================================
+         ENTERPRISE SEC MONITOR — LOG METRICS INCIDENT EXPORT
+======================================================================
+Generated On   : ${DateTime.now().toLocal()}
+Alert ID       : ${alert["id"] ?? "N/A"}
+Threat Title   : ${alert["title"] ?? "Unknown Indicator"}
+Severity Level : ${alert["severity"] ?? "UNKNOWN"}
+Incident Type  : ${alert["type"] ?? "Subsystem Flag"}
+Current Status : ${alert["status"] ?? "OPEN"}
+Total Events   : ${alert["count"] ?? 0} Occurrences
+Time Recorded  : ${alert["timestamp"] ?? "N/A"}
+
+----------------------------------------------------------------------
+DETAILED DETECTED SYSTEM DESCRIPTION:
+----------------------------------------------------------------------
+${alert["description"] ?? "No deep narrative data log trace recorded."}
+
+----------------------------------------------------------------------
+RECOMMENDED SOC RECOVERY & MITIGATION INSTRUCTIONS:
+----------------------------------------------------------------------
+${alert["recommendation"] ?? "Review host-level logs for signs of persistence."}
+======================================================================
+               CONFIDENTIAL — INTERNAL USE ONLY
+======================================================================
+""";
+
+    // Replaced sharePdf with share (since content is raw text data, not a binary PDF structure)
+    await Printing.sharePdf(
+      bytes: utf8.encode(content),
+      filename: fileName,
+    );
+  }
+
+  // ── HELPERS ──
   static pw.Widget _statBox(String label, String value, PdfColor color) {
     return pw.Container(
       padding: const pw.EdgeInsets.symmetric(horizontal: 12, vertical: 10),

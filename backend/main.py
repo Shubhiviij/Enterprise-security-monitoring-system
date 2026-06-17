@@ -71,6 +71,8 @@ def read_logs():
 def get_logs():
     return {"logs": read_logs()}
 
+from datetime import datetime
+
 @app.get("/alerts")
 def get_alerts():
     docker_count = 0
@@ -78,6 +80,8 @@ def get_alerts():
     failed_count = 0
 
     logs = read_logs()
+    current_time = datetime.now().strftime("%Y-%m-%d %H:%M")
+
     for log in logs:
         log_lower = log.lower()
         if "failed" in log_lower:
@@ -88,15 +92,53 @@ def get_alerts():
             network_count += 1
 
     alerts = []
+
+    # ── 1. AUTHENTICATION FAILURE ALERT METADATA ──
     if failed_count > 0:
-        alerts.append({"severity": "HIGH", "message": f"{failed_count} failed authentication events"})
+        alerts.append({
+            "id": "ALT-4011",
+            "title": "Brute-Force Authentication Attempt",
+            "severity": "HIGH",
+            "type": "Access Control / Identity",
+            "status": ALERT_STATUS_DB.get("ALT-4011", "OPEN"),
+            "count": failed_count,
+            "timestamp": current_time,
+            "description": f"Detected {failed_count} explicit subsystem login failures within the current journalctl buffer window. This indicates an active credential-stuffing or automated dictionary attack against local access entry points.",
+            "recommendation": "Identify the structural source IP origin from live access logs, immediately terminate conflicting sessions, and enforce host-level firewall drop rules via iptables/ufw.",
+            "message": f"{failed_count} failed authentication events" # Legacy backup key to protect dashboard stability
+        })
+
+    # ── 2. DOCKER SUBSYSTEM ALERT METADATA ──
     if docker_count > 0:
-        alerts.append({"severity": "MEDIUM", "message": f"{docker_count} docker-related events"})
+        alerts.append({
+            "id": "ALT-9082",
+            "title": "Container Daemon Event Spike",
+            "severity": "MEDIUM",
+            "type": "Container Runtime Security",
+            "status": ALERT_STATUS_DB.get("ALT-9082", "INVESTIGATING"),
+            "count": docker_count,
+            "timestamp": current_time,
+            "description": f"The local Linux engine reported {docker_count} rapid docker container microservice events. Spikes in container transitions or namespace modifications could point to privilege escalation attempts or unauthorized image execution configurations.",
+            "recommendation": "Execute 'docker ps -a' via target system terminal to investigate unexpected instances and check running docker container statistics for abnormal resource consumption patterns.",
+            "message": f"{docker_count} docker-related events" # Legacy backup key
+        })
+
+    # ── 3. NETWORK SUBSYSTEM ALERT METADATA ──
     if network_count > 0:
-        alerts.append({"severity": "LOW", "message": f"{network_count} network-related events"})
+        alerts.append({
+            "id": "ALT-2043",
+            "title": "Abnormal Interface Traffic",
+            "severity": "LOW",
+            "type": "Network Surveillance Feed",
+            "status": ALERT_STATUS_DB.get("ALT-2043", "RESOLVED"),
+            "count": network_count,
+            "timestamp": current_time,
+            "description": f"Logged {network_count} distinct core socket system interface connectivity reports. This activity baseline represents routine tracking metrics but should be monitored for sudden internal pivoting markers.",
+            "recommendation": "Cross-reference mapped target ports with internal service architecture sheets to confirm valid system configurations.",
+            "message": f"{network_count} network-related events" # Legacy backup key
+        })
 
     return {"alerts": alerts}
-
 @app.get("/stats")
 def get_stats():
     logs = read_logs()
@@ -213,4 +255,26 @@ def scan_url(data: URLRequest):
         "normalized_score": normalized,
         "reasons": reasons,
     }
+ALERT_STATUS_DB = {
+    "ALT-4011": "OPEN",
+    "ALT-9082": "INVESTIGATING",
+    "ALT-2043": "RESOLVED"
+}
+
+class StatusUpdateRequest(BaseModel):
+    alert_id: str
+    status: str
+
+@app.post("/alerts/update-status")
+def update_alert_status(data: StatusUpdateRequest):
+    aid = data.alert_id.upper()
+    status_upper = data.status.upper()
+    
+    if status_upper not in ["OPEN", "INVESTIGATING", "RESOLVED"]:
+        raise HTTPException(status_code=400, detail="Invalid operational status assignment")
         
+    # Update our runtime status database tracker
+    ALERT_STATUS_DB[aid] = status_upper
+    print(f"[+] Operational Alert {aid} migration shifted to state: {status_upper}")
+    return {"status": "success", "alert_id": aid, "new_status": status_upper}
+                                                                                        
