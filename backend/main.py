@@ -188,19 +188,28 @@ def get_threats():
         data = response.json()
         threats = []
 
+        # Parse out the top 20 actionable intelligence threats
         for vuln in data["vulnerabilities"][:20]:
+            # Clean up raw notes or use fallback references
+            cve_id = vuln.get("cveID", "Unknown CVE")
+            
             threats.append({
-                "cve": vuln["cveID"],
-                "title": vuln["vulnerabilityName"],
-                "vendor": vuln["vendorProject"],
-                "product": vuln["product"],
-                "severity": "HIGH",
-                "dateAdded": vuln["dateAdded"],
+                "cve": cve_id,
+                "title": vuln.get("vulnerabilityName", "N/A"),
+                "vendor": vuln.get("vendorProject", "N/A"),
+                "product": vuln.get("product", "N/A"),
+                "dateAdded": vuln.get("dateAdded", "N/A"),
+                # ── ENRICHED SOC THREAT INTEL FIELDS ──
+                "severity": "CRITICAL" if "remote code execution" in vuln.get("shortDescription", "").lower() else "HIGH",
+                "summary": vuln.get("shortDescription", "No abstract summary available in source feed."),
+                "requiredAction": vuln.get("requiredAction", "Apply vendor updates immediately or isolate the system asset."),
+                "dueDate": vuln.get("dueDate", "Immediate mitigation recommended"),
+                "referenceUrl": f"https://nvd.nist.gov/vuln/detail/{cve_id}"
             })
+
         return {"threats": threats}
     except Exception as e:
         return {"error": str(e), "threats": []}
-
 @app.get("/history")
 def history():
     return {"history": get_history()}
@@ -277,4 +286,3 @@ def update_alert_status(data: StatusUpdateRequest):
     ALERT_STATUS_DB[aid] = status_upper
     print(f"[+] Operational Alert {aid} migration shifted to state: {status_upper}")
     return {"status": "success", "alert_id": aid, "new_status": status_upper}
-                                                                                        

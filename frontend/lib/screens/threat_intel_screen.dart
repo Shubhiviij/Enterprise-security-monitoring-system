@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../services/api_service.dart';
+import 'threat_details_screen.dart';
 
 class ThreatIntelScreen extends StatefulWidget {
   const ThreatIntelScreen({super.key});
@@ -320,12 +321,18 @@ class _ThreatIntelScreenState extends State<ThreatIntelScreen> {
                   return Card(
                     elevation: 3,
                     margin: const EdgeInsets.symmetric(vertical: 8),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                     child: InkWell(
                       borderRadius: BorderRadius.circular(12),
-                      onTap: () => _showThreatDetails(threat), // Fixed: Now handles dialogue sheet directly
+                      // ── ROUTE TO FULL SCREEN INTEL DEEP DIVE ──
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => ThreatDetailsScreen(threat: threat),
+                          ),
+                        );
+                      },
                       child: Padding(
                         padding: const EdgeInsets.all(16),
                         child: Column(
