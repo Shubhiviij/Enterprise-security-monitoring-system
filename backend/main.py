@@ -1,4 +1,6 @@
 import subprocess
+import sqlite3
+from database.db import DB_NAME, hash_password
 import requests
 from fastapi import FastAPI, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
@@ -22,6 +24,13 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+class UserCreate(BaseModel):
+    username: str
+    password: str
+    role: str
+
+class RoleUpdate(BaseModel):
+    role: str
 class URLRequest(BaseModel):
     url: str
 
@@ -286,3 +295,60 @@ def update_alert_status(data: StatusUpdateRequest):
     ALERT_STATUS_DB[aid] = status_upper
     print(f"[+] Operational Alert {aid} migration shifted to state: {status_upper}")
     return {"status": "success", "alert_id": aid, "new_status": status_upper}
+
+@app.get("/users")
+def get_users():
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    cursor.execute("SELECT id, username, role FROM users ORDER BY id ASC")
+    rows = cursor.fetchall()
+    conn.close()
+    
+    return [
+        {"id": row[0], "username": row[1], "role": row[2]}
+        for row in rows
+    ]
+
+@app.post("/users")
+def create_user(user: UserCreate):
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    try:
+        # Enforce password hashing protections
+        encrypted_password = hash_password(user.password)
+        cursor.execute("""
+            INSERT INTO users (username, password_hash, role)
+            VALUES (?, ?, ?)
+        """, (user.username.lower().strip(), encrypted_password, user.role))
+        conn.commit()
+        return {"message": "User created successfully"}
+    except sqlite3.IntegrityError:
+        raise HTTPException(status_code=400, detail="Operator profile already registered")
+    finally:
+        conn.close()
+
+@app.delete("/users/{user_id}")
+def delete_user(user_id: int):
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    
+    # Prevent the active admin account from deleting itself by accident
+    cursor.execute("SELECT username FROM users WHERE id = ?", (user_id,))
+    target = cursor.fetchone()
+    if target and target[0] == "admin":
+        conn.close()
+        raise HTTPException(status_code=403, detail="Cannot delete master root administrator")
+        
+    cursor.execute("DELETE FROM users WHERE id = ?", (user_id,))
+    conn.commit()
+    conn.close()
+    return {"message": "User deleted successfully"}
+
+@app.put("/users/{user_id}/role")
+def update_role(user_id: int, data: RoleUpdate):
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    cursor.execute("UPDATE users SET role = ? WHERE id = ?", (data.role, user_id))
+    conn.commit()
+    conn.close()
+    return {"message": "Role metrics updated successfully"}

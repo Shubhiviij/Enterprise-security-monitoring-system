@@ -14,6 +14,7 @@ import 'login_screen.dart';
 import 'phishing_scanner_screen.dart';
 import '../services/report_service.dart';
 import '../widgets/threat_trend_chart.dart';
+import 'user_management_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -233,6 +234,21 @@ class _DashboardScreenState extends State<DashboardScreen> {
               },
             ),
             const Divider(),
+            if (AuthSession().isAdmin) ...[
+              ListTile(
+                leading: const Icon(Icons.supervised_user_circle_outlined, color: Colors.lightBlueAccent),
+                title: const Text("User Management", style: TextStyle(fontWeight: FontWeight.w500)),
+                subtitle: const Text("Manage operator clearance levels", style: TextStyle(fontSize: 10, color: Colors.grey)),
+                onTap: () {
+                  Navigator.pop(context); // Close the drawer drawer view
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const UserManagementScreen()),
+                  );
+                },
+              ),
+              const Divider(),
+            ],
 
             // ── ROLE-BASED ACCESS CONTROL ON SETTINGS ──
             ListTile(

@@ -1,5 +1,4 @@
-import sqlite3
-from datetime import datetime
+import sqlite3from datetime import datetime
 import bcrypt  # <-- Change this import
 
 DB_NAME = "threat_history.db"
@@ -135,4 +134,3 @@ def get_history():
         })
 
     return list(reversed(history))
-

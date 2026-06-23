@@ -57,13 +57,26 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                   decoration: const InputDecoration(labelText: "Initial Credentials Key", labelStyle: TextStyle(color: Colors.white60)),
                 ),
                 const SizedBox(height: 16),
-                DropdownButtonFormField<String>(
-                    dropdownColor: const Color(0xFF1E293B),
-                    value: selectedRole,
-                    items: _availableRoles.map((r) => DropdownMenuItem(value: r, child: Text(r, style: const TextStyle(color: Colors.white)))).toList(),
-                    onChanged: (val) if (val != null) setModalState(() => selectedRole = val),
-        decoration: const InputDecoration(labelText: "Access Controls Role", labelStyle: TextStyle(color: Colors.white60)),
-      ),
+                    DropdownButtonFormField<String>(
+                      dropdownColor: const Color(0xFF1E293B),
+                      value: selectedRole,
+                      items: _availableRoles
+                          .map((r) => DropdownMenuItem(
+                        value: r,
+                        child: Text(r, style: const TextStyle(color: Colors.white)),
+                      ))
+                          .toList(),
+                      // ─── FIXED: CHANGED SHORT IF STATEMENT ARROW TO PROPER SCOPED BRACKETS ───
+                      onChanged: (val) {
+                        if (val != null) {
+                          setModalState(() => selectedRole = val);
+                        }
+                      },
+                      decoration: const InputDecoration(
+                        labelText: "Access Controls Role",
+                        labelStyle: TextStyle(color: Colors.white60),
+                      ),
+                    ),
       ],
     ),
     ),
