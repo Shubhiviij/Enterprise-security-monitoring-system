@@ -109,4 +109,48 @@ class ApiService {
       return false;
     }
   }
+  static Future<List<dynamic>> getUsers() async {
+    try {
+      final response = await http.get(Uri.parse("$baseUrl/users"));
+      if (response.statusCode == 200) return jsonDecode(response.body);
+      return [];
+    } catch (e) {
+      return [];
+    }
+  }
+
+  static Future<bool> createNewUser(String username, String password, String role) async {
+    try {
+      final response = await http.post(
+        Uri.parse("$baseUrl/users"),
+        headers: {"Content-Type": "application/json"},
+        body: jsonEncode({"username": username, "password": password, "role": role}),
+      );
+      return response.statusCode == 200;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  static Future<bool> changeUserRole(int id, String selectedRole) async {
+    try {
+      final response = await http.put(
+        Uri.parse("$baseUrl/users/$id/role"),
+        headers: {"Content-Type": "application/json"},
+        body: jsonEncode({"role": selectedRole}),
+      );
+      return response.statusCode == 200;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  static Future<bool> deprovisionUser(int id) async {
+    try {
+      final response = await http.delete(Uri.parse("$baseUrl/users/$id"));
+      return response.statusCode == 200;
+    } catch (e) {
+      return false;
+    }
+  }
 }
