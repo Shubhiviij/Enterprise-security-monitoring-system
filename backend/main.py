@@ -1,3 +1,5 @@
+y
+import re
 import psutil
 import shutil
 import time
@@ -13,7 +15,10 @@ from database.db import (
     save_stats,
     get_history,
     verify_user_credentials,
-    create_user
+    create_user,
+    save_behavior_snapshot,
+    get_behavior_baseline,
+    analyze_behavior
 )
 
 app = FastAPI()
@@ -374,3 +379,74 @@ def system_health():
         "database": "CONNECTED",
         "api_response_ms": round(time.perf_counter() * 1000) % 100
     }
+@app.get("/api/dashboard/refresh")  # Example path matching your Flutter dashboard fetch lifecycle
+async def refresh_dashboard_telemetry():
+    # 1. Fetch live metrics from your Kali subsystems/log parsers here...
+    current_failed = 3
+    current_docker = 14
+    current_network = 120
+    current_cpu = 18.5
+    current_memory = 62.1
+    
+    # 2. Append the snapshot seamlessly to the telemetry tables
+    save_behavior_snapshot(
+        failed_logins=current_failed,
+        docker_events=current_docker,
+        network_events=current_network,
+        cpu=current_cpu,
+        memory=current_memory
+    )
+    
+    return {"status": "success", "message": "Baseline metrics logged."}
+@app.get("/api/dashboard/baseline")
+async def fetch_calculated_baseline():
+    """
+    Exposes the system-wide baseline averages to your frontend environment
+    to support statistical deviation maps and behavioral alerts.
+    """
+    try:
+        baseline = get_behavior_baseline()
+        return {"status": "success", "data": baseline}
+    except Exception as e:
+        return {"status": "error", "message": f"Failed to compute baseline analytics: {str(e)}"}
+@app.get("/api/behavior-analysis")
+async def get_behavior_analysis():
+    """
+    Computes a real-time behavioral audit against historical mathematical norms
+    and exposes threat warnings and cumulative metrics to client devices.
+    """
+    try:
+        # 1. Fetch calculated historical norms from your SQLite baseline table
+        baseline_data = get_behavior_baseline()
+        
+        # 2. Capture or track live metrics from your active Kali subsystems/log pools
+        # TODO: Replace these static assignments with your live log/subsystem parsers
+        # (e.g., psutil.cpu_percent(), psutil.virtual_memory(), journalctl counts)
+        current_live_metrics = {
+            "failed_logins": 5,     # Triggers the 3x baseline multiplier if average is ~1
+            "docker_events": 18,    # Triggers anomaly if baseline average is low
+            "network_events": 150,
+            "cpu": 68.4,            # Spikes past normal host operations
+            "memory": 82.1          # System load anomaly
+        }
+        
+        # 3. Process the live values against the historical engine parameters
+        evaluation_report = analyze_behavior(current=current_live_metrics, baseline=baseline_data)
+        
+        # 4. Return the consolidated structured report payload matching Phase 5 specifications
+        return {
+            "status": evaluation_report["status"],
+            "risk_score": evaluation_report["risk_score"],
+            "anomalies": evaluation_report["anomalies"],
+            "meta": {
+                "evaluated_at": datetime.now().isoformat(),
+                "tracked_metrics": current_live_metrics
+            }
+        }
+        
+    except Exception as e:
+        return {
+            "status": "ERROR",
+            "risk_score": 0,
+            "anomalies": [f"Failed to compile backend behavioral analytics: {str(e)}"]
+        }

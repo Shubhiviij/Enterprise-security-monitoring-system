@@ -153,4 +153,14 @@ class ApiService {
       return false;
     }
   }
+  static Future<Map<String, dynamic>> getBehaviorAnalysis() async {
+    final response =
+    await http.get(Uri.parse('$baseUrl/api/behavior-analysis'));
+
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    }
+
+    throw Exception("Failed to fetch behavioral analysis");
+  }
 }

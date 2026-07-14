@@ -15,6 +15,7 @@ import 'phishing_scanner_screen.dart';
 import '../services/report_service.dart';
 import '../widgets/threat_trend_chart.dart';
 import 'user_management_screen.dart';
+import 'behaviour_analysis_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -231,6 +232,20 @@ class _DashboardScreenState extends State<DashboardScreen> {
               onTap: () {
                 Navigator.pop(context);
                 Navigator.push(context, MaterialPageRoute(builder: (_) => const ThreatIntelScreen()));
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.psychology),
+              title: const Text("Behavior Analysis"),
+              onTap: () {
+                Navigator.pop(context);
+
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => const BehaviorAnalysisScreen(),
+                  ),
+                );
               },
             ),
             const Divider(),
