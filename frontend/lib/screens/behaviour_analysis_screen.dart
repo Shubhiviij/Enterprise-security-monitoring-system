@@ -37,7 +37,9 @@ class _BehaviorAnalysisScreenState extends State<BehaviorAnalysisScreen> {
         });
       }
     }
+    final metrics = data!["meta"]["tracked_metrics"];
   }
+
 
   Color _getStatusColor(String? status) {
     switch (status?.toUpperCase()) {
@@ -51,6 +53,38 @@ class _BehaviorAnalysisScreenState extends State<BehaviorAnalysisScreen> {
         return Colors.grey;
     }
   }
+
+  // 💡 FIX 1: Relocated helper layout utility inside the State class scope
+  Widget buildMetricCard(String title, String value, IconData icon, Color color) {
+    return Card(
+      elevation: 3,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          children: [
+            Icon(icon, color: color, size: 30),
+            const SizedBox(height: 10),
+            Text(
+              value,
+              style: const TextStyle(
+                fontSize: 24,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              title,
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
 
   @override
   Widget build(BuildContext context) {
@@ -70,16 +104,104 @@ class _BehaviorAnalysisScreenState extends State<BehaviorAnalysisScreen> {
       body: _buildBody(),
     );
   }
+  Widget _buildAnomaliesSection() {
+    final anomalies = data?["anomalies"];
+
+    if (anomalies == null || anomalies.isEmpty) {
+      return Card(
+        elevation: 2,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: Colors.green.withOpacity(0.12),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.check_circle_outline,
+                  color: Colors.green,
+                  size: 30,
+                ),
+              ),
+
+              const SizedBox(width: 16),
+
+              const Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      "No behavioral anomalies detected",
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 15,
+                      ),
+                    ),
+                    SizedBox(height: 4),
+                    Text(
+                      "Current system activity is within the established behavioral baseline.",
+                      style: TextStyle(
+                        color: Colors.grey,
+                        fontSize: 13,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return Column(
+      children: anomalies.map<Widget>((anomaly) {
+        return Card(
+          elevation: 2,
+          margin: const EdgeInsets.only(bottom: 10),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: ListTile(
+            leading: Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Colors.red.withOpacity(0.12),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                Icons.warning_amber_rounded,
+                color: Colors.red,
+              ),
+            ),
+            title: Text(
+              anomaly.toString(),
+              style: const TextStyle(
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            subtitle: const Text(
+              "Behavioral deviation detected",
+            ),
+          ),
+        );
+      }).toList(),
+    );
+  }
 
   Widget _buildBody() {
-    // 1. Loading State
     if (isLoading) {
       return const Center(
         child: CircularProgressIndicator(),
       );
     }
 
-    // 2. Error State
     if (errorMessage != null || data == null) {
       return Center(
         child: Column(
@@ -93,15 +215,23 @@ class _BehaviorAnalysisScreenState extends State<BehaviorAnalysisScreen> {
       );
     }
 
-    // 3. Complete Data Content State
     final anomalies = data!["anomalies"] as List<dynamic>? ?? [];
     final riskScore = data!["risk_score"] ?? 0;
     final status = data!["status"] ?? "UNKNOWN";
+
+    // Safety check parsing dynamic keys out of nested meta maps
+    final metrics = data!["meta"]?["tracked_metrics"] ?? {};
+    final failedLogins = metrics["failed_logins"] ?? 0;
+    final dockerEvents = metrics["docker_events"] ?? 0;
+    final networkEvents = metrics["network_events"] ?? 0;
+    final cpuUsage = metrics["cpu"] ?? 0.0;
+    final memoryUsage = metrics["memory"] ?? 0.0;
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(20),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
+
         children: [
           // Risk Indicator Dashboard Card
           Card(
@@ -115,28 +245,19 @@ class _BehaviorAnalysisScreenState extends State<BehaviorAnalysisScreen> {
                 children: [
                   const Text(
                     "Overall Risk Score",
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                    ),
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                   ),
                   const SizedBox(height: 25),
                   Text(
                     "$riskScore",
-                    style: const TextStyle(
-                      fontSize: 50,
-                      fontWeight: FontWeight.bold,
-                    ),
+                    style: const TextStyle(fontSize: 50, fontWeight: FontWeight.bold),
                   ),
                   const SizedBox(height: 12),
                   Chip(
                     backgroundColor: _getStatusColor(status),
                     label: Text(
                       status,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.bold,
-                      ),
+                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
                     ),
                   ),
                 ],
@@ -145,11 +266,62 @@ class _BehaviorAnalysisScreenState extends State<BehaviorAnalysisScreen> {
           ),
           const SizedBox(height: 24),
 
+          const Text(
+            "Current System Metrics",
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 15),
+
+          // 💡 FIX 2: Using Balanced Expanded Row structures for even grid pairs
+          Row(
+            children: [
+              Expanded(child: buildMetricCard("Failed Logins", "$failedLogins", Icons.lock, Colors.red)),
+              const SizedBox(width: 10),
+              Expanded(child: buildMetricCard("Docker Events", "$dockerEvents", Icons.inventory, Colors.blue)),
+            ],
+          ),
+          const SizedBox(height: 10),
+
+          Row(
+            children: [
+              Expanded(child: buildMetricCard("Network Events", "$networkEvents", Icons.wifi, Colors.green)),
+              const SizedBox(width: 10),
+              Expanded(child: buildMetricCard("CPU Usage", "$cpuUsage%", Icons.memory, Colors.orange)),
+            ],
+          ),
+          const SizedBox(height: 10),
+
+          // 💡 FIX 3: Isolated single metric row uses half layout block instead of broken Spacer
+          Row(
+            children: [
+              Expanded(child: buildMetricCard("Memory Usage", "$memoryUsage%", Icons.storage, Colors.purple)),
+              const SizedBox(width: 10),
+              const Expanded(child: SizedBox.shrink()), // Clean container block balance
+            ],
+          ),
+          const SizedBox(height: 24),
+
           // Detected Threat Logs Title
           const Text(
             "Identified System Anomalies",
             style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
           ),
+          const SizedBox(height: 24),
+
+          const Align(
+            alignment: Alignment.centerLeft,
+            child: Text(
+              "Detected Anomalies",
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+
+          const SizedBox(height: 12),
+
+          _buildAnomaliesSection(),
           const SizedBox(height: 12),
 
           // Anomalies Ingestion Directory Feed
