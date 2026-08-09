@@ -163,4 +163,5 @@ class ApiService {
 
     throw Exception("Failed to fetch behavioral analysis");
   }
+
 }

@@ -1,21 +1,29 @@
 import 'dart:async';
-import 'package:enterprise_security_monitor/screens/threat_intel_screen.dart';
 import 'package:flutter/material.dart';
-import 'package:enterprise_security_monitor/screens/alert_screen.dart';
-import 'package:enterprise_security_monitor/services/api_service.dart';
+import 'package:intl/intl.dart';
+
+// Models & Services
+import '../models/behavior_analysis.dart';
+import '../services/api_service.dart';
 import '../services/auth_session.dart';
+import '../services/report_service.dart';
+
+// Widgets
+import '../widgets/alert_tile.dart';
+import '../widgets/behavior_analysis_card.dart';
 import '../widgets/severity_card.dart';
 import '../widgets/stat_card.dart';
-import '../widgets/alert_tile.dart';
+import '../widgets/threat_trend_chart.dart';
+
+// Screens
 import 'alert_details_screen.dart';
+import 'alert_screen.dart';
+import 'behaviour_analysis_screen.dart';
 import 'live_logs_screen.dart';
-import 'package:intl/intl.dart';
 import 'login_screen.dart';
 import 'phishing_scanner_screen.dart';
-import '../services/report_service.dart';
-import '../widgets/threat_trend_chart.dart';
+import 'threat_intel_screen.dart';
 import 'user_management_screen.dart';
-import 'behaviour_analysis_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -25,6 +33,95 @@ class DashboardScreen extends StatefulWidget {
 }
 
 class _DashboardScreenState extends State<DashboardScreen> {
+  // State Data Collections
+  Map<String, dynamic>? _statsData;
+  Map<String, dynamic>? _severityData;
+  List<dynamic> _alerts = [];
+  List<dynamic> _threats = [];
+  BehaviorAnalysis? _behaviorAnalysis;
+
+  // Operational State Flags
+  bool _isLoading = true;
+  bool _behaviorLoading = true;
+  String? _errorMessage;
+  Timer? _timer;
+
+  // Track precise data sync time
+  String _lastUpdated = "--:--:--";
+
+  @override
+  void initState() {
+    super.initState();
+    // Consolidated single initialization pass
+    _fetchData(isInitialLoad: true);
+
+    // Polls background data smoothly every 5 seconds
+    _timer = Timer.periodic(
+      const Duration(seconds: 5),
+          (_) => _fetchData(isInitialLoad: false),
+    );
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  // ── UNIFIED TELEMETRY SYNC PIPELINE ──
+  Future<void> _fetchData({required bool isInitialLoad}) async {
+    if (isInitialLoad) {
+      setState(() {
+        _isLoading = true;
+        _behaviorLoading = true;
+        _errorMessage = null;
+      });
+    }
+
+    try {
+      // Parallel API executions for improved speed
+      final results = await Future.wait([
+        ApiService.getStats(),
+        ApiService.getSeverity(),
+        ApiService.getAlerts(),
+        ApiService.getThreats(),
+        ApiService.getBehaviorAnalysis(),
+      ]);
+
+      if (!mounted) return;
+
+      setState(() {
+        _statsData = results[0] as Map<String, dynamic>?;
+        _severityData = results[1] as Map<String, dynamic>?;
+        _alerts = (results[2] as List<dynamic>?) ?? [];
+        _threats = (results[3] as List<dynamic>?) ?? [];
+
+        // Parse Behavior Analysis Object safely
+        if (results[4] != null) {
+          _behaviorAnalysis = BehaviorAnalysis.fromJson(results[4] as Map<String, dynamic>);
+        }
+
+        _errorMessage = null;
+        _isLoading = false;
+        _behaviorLoading = false;
+
+        // Timestamp captures precisely when the engine pushes fresh data mutations
+        _lastUpdated = DateFormat('HH:mm:ss').format(DateTime.now());
+      });
+    } catch (e) {
+      if (!mounted) return;
+
+      setState(() {
+        if (_statsData == null || _severityData == null) {
+          _errorMessage = "Failed to sync security data: $e";
+        }
+        _isLoading = false;
+        _behaviorLoading = false;
+      });
+    }
+  }
+
+  // Helper KPI Widget Generator
   Widget _kpiTile(IconData icon, String label, String status, Color color) {
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 10),
@@ -48,86 +145,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
       ),
     );
   }
-  Map<String, dynamic>? _statsData;
-  Map<String, dynamic>? _severityData;
-  List<dynamic> _alerts = [];
-  List<dynamic> _threats = [];
-  bool _isLoading = true;
-  String? _errorMessage;
-  Timer? _timer;
-
-  // Track precise data sync time
-  String _lastUpdated = "--:--:--";
-
-  @override
-  void initState() {
-    super.initState();
-    _fetchData(isInitialLoad: true);
-
-    // Polls background data smoothly every 5 seconds
-    _timer = Timer.periodic(
-      const Duration(seconds: 5),
-          (_) => _fetchData(isInitialLoad: false),
-    );
-  }
-
-  Future<void> _fetchData({required bool isInitialLoad}) async {
-    if (isInitialLoad) {
-      setState(() {
-        _isLoading = true;
-        _errorMessage = null;
-      });
-    }
-
-    try {
-      // Parallel API executions for improved speed
-      final results = await Future.wait([
-        ApiService.getStats(),
-        ApiService.getSeverity(),
-        ApiService.getAlerts(),
-        ApiService.getThreats(),
-      ]);
-
-      if (mounted) {
-        setState(() {
-          _statsData = results[0] as Map<String, dynamic>;
-          _severityData = results[1] as Map<String, dynamic>;
-          _alerts = results[2] as List<dynamic>;
-          _threats = results[3] as List<dynamic>;
-          _errorMessage = null; // Clear any existing historical errors if it recovers
-          _isLoading = false;
-
-          // Timestamp captures precisely when the engine pushes fresh data mutations
-          _lastUpdated =
-              DateFormat('HH:mm:ss').format(DateTime.now());
-        });
-      }
-    } catch (e) {
-      if (mounted) {
-        setState(() {
-          // Optimized UX: Only show full-screen error if initial load completely fails
-          if (_statsData == null || _severityData == null) {
-            _errorMessage = "Failed to sync security data: $e";
-          }
-          _isLoading = false;
-        });
-      }
-    }
-  }
-
-  @override
-  void dispose() {
-    _timer?.cancel();
-    super.dispose();
-  }
 
   @override
   Widget build(BuildContext context) {
-    // Fallback default states to keep UI rendering safe
     final stats = _statsData ?? {"threats": 0, "alerts": 0, "users": 0, "high_risk": 0};
     final severity = _severityData ?? {"high": 0, "medium": 0, "low": 0};
-
-    // Dynamic state computation for the top banner
     final hasCriticalThreats = (severity["high"] ?? 0) > 0;
 
     return Scaffold(
@@ -135,15 +157,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
         title: const Text("Security Dashboard"),
         backgroundColor: Colors.blueGrey,
         actions: [
-          // Anti-spam configuration built into manual sync interaction triggers
           IconButton(
             icon: const Icon(Icons.refresh),
             tooltip: "Refresh Dashboard Data",
-            onPressed: _isLoading
-                ? null
-                : () {
-              _fetchData(isInitialLoad: false);
-            },
+            onPressed: _isLoading ? null : () => _fetchData(isInitialLoad: false),
           ),
           IconButton(
             icon: const Icon(Icons.picture_as_pdf),
@@ -165,7 +182,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
         child: ListView(
           padding: EdgeInsets.zero,
           children: [
-            // ── CUSTOM OPERATOR PROFILE HEADER ──
             UserAccountsDrawerHeader(
               decoration: const BoxDecoration(color: Colors.blueGrey),
               currentAccountPicture: CircleAvatar(
@@ -196,7 +212,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 ),
               ),
             ),
-
             ListTile(
               leading: const Icon(Icons.dashboard),
               title: const Text("Dashboard"),
@@ -239,12 +254,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
               title: const Text("Behavior Analysis"),
               onTap: () {
                 Navigator.pop(context);
-
                 Navigator.push(
                   context,
-                  MaterialPageRoute(
-                    builder: (_) => const BehaviorAnalysisScreen(),
-                  ),
+                  MaterialPageRoute(builder: (_) => const BehaviorAnalysisScreen()),
                 );
               },
             ),
@@ -255,7 +267,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 title: const Text("User Management", style: TextStyle(fontWeight: FontWeight.w500)),
                 subtitle: const Text("Manage operator clearance levels", style: TextStyle(fontSize: 10, color: Colors.grey)),
                 onTap: () {
-                  Navigator.pop(context); // Close the drawer drawer view
+                  Navigator.pop(context);
                   Navigator.push(
                     context,
                     MaterialPageRoute(builder: (_) => const UserManagementScreen()),
@@ -264,35 +276,22 @@ class _DashboardScreenState extends State<DashboardScreen> {
               ),
               const Divider(),
             ],
-
-            // ── ROLE-BASED ACCESS CONTROL ON SETTINGS ──
             ListTile(
               leading: const Icon(Icons.settings),
               title: const Text("Settings"),
-              trailing: AuthSession().isAdmin
-                  ? null
-                  : const Icon(Icons.lock_outline, size: 16, color: Colors.grey),
-              subtitle: AuthSession().isAdmin
-                  ? null
-                  : const Text("Requires Administrator rights", style: TextStyle(fontSize: 10)),
-              onTap: AuthSession().isAdmin
-                  ? () {
-                Navigator.pop(context);
-                // TODO: Navigate to administrative panel screen
-              }
-                  : null, // Disables touch interactions for Analysts
+              trailing: AuthSession().isAdmin ? null : const Icon(Icons.lock_outline, size: 16, color: Colors.grey),
+              subtitle: AuthSession().isAdmin ? null : const Text("Requires Administrator rights", style: TextStyle(fontSize: 10)),
+              onTap: AuthSession().isAdmin ? () => Navigator.pop(context) : null,
             ),
-
-            // ── FUNCTIONAL LOGOUT TERMINATION CHECKPOINT ──
             ListTile(
               leading: const Icon(Icons.logout, color: Colors.redAccent),
               title: const Text("Logout", style: TextStyle(color: Colors.redAccent)),
               onTap: () {
-                AuthSession().clearSession(); // Terminate local token parameters
+                AuthSession().clearSession();
                 Navigator.pushAndRemoveUntil(
                   context,
                   MaterialPageRoute(builder: (_) => const LoginScreen()),
-                      (route) => false, // Clears navigation history stack to prevent back-button access
+                      (route) => false,
                 );
               },
             ),
@@ -326,42 +325,27 @@ class _DashboardScreenState extends State<DashboardScreen> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  const Text(
-                    "Real-time monitoring of security events",
-                    style: TextStyle(color: Colors.grey),
-                  ),
-                  Text(
-                    "Last Updated: $_lastUpdated",
-                    style: const TextStyle(
-                      color: Colors.grey,
-                      fontSize: 12,
-                    ),
-                  ),
+                  const Text("Real-time monitoring of security events", style: TextStyle(color: Colors.grey)),
+                  Text("Last Updated: $_lastUpdated", style: const TextStyle(color: Colors.grey, fontSize: 12)),
                 ],
               ),
               const SizedBox(height: 16),
 
-              // ── SECURITY STATUS BANNER (DYNAMIC) ──
+              // ── SECURITY STATUS BANNER ──
               Container(
                 width: double.infinity,
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                 decoration: BoxDecoration(
-                  color: hasCriticalThreats
-                      ? Colors.red.withOpacity(0.08)
-                      : Colors.green.withOpacity(0.08),
+                  color: hasCriticalThreats ? Colors.red.withOpacity(0.08) : Colors.green.withOpacity(0.08),
                   borderRadius: BorderRadius.circular(10),
                   border: Border.all(
-                    color: hasCriticalThreats
-                        ? Colors.red.withOpacity(0.3)
-                        : Colors.green.withOpacity(0.3),
+                    color: hasCriticalThreats ? Colors.red.withOpacity(0.3) : Colors.green.withOpacity(0.3),
                   ),
                 ),
                 child: Row(
                   children: [
                     Icon(
-                      hasCriticalThreats
-                          ? Icons.gpp_bad_outlined
-                          : Icons.verified_user_outlined,
+                      hasCriticalThreats ? Icons.gpp_bad_outlined : Icons.verified_user_outlined,
                       color: hasCriticalThreats ? Colors.red : Colors.green,
                       size: 18,
                     ),
@@ -403,7 +387,25 @@ class _DashboardScreenState extends State<DashboardScreen> {
               ),
               const SizedBox(height: 20),
 
-              // --- STATS GRID ---
+              // ── BEHAVIOR ANOMALY DIAGNOSTIC CARD ──
+              if (_behaviorLoading)
+                const Center(
+                  child: Padding(
+                    padding: EdgeInsets.symmetric(vertical: 12.0),
+                    child: CircularProgressIndicator(),
+                  ),
+                )
+              else if (_behaviorAnalysis != null) ...[
+                BehaviorAnalysisCard(
+                  status: _behaviorAnalysis!.status,
+                  riskScore: _behaviorAnalysis!.riskScore,
+                  anomalies: _behaviorAnalysis!.anomalies,
+                  metrics: _behaviorAnalysis!.trackedMetrics,
+                ),
+                const SizedBox(height: 20),
+              ],
+
+              // ── STATS GRID ──
               GridView.count(
                 shrinkWrap: true,
                 physics: const NeverScrollableScrollPhysics(),
@@ -440,7 +442,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
               ),
               const SizedBox(height: 30),
 
-              // --- THREAT SEVERITY SECTION ---
+              // ── THREAT SEVERITY SECTION ──
               const Text(
                 "Threat Severity",
                 style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
@@ -475,14 +477,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
               ),
               const SizedBox(height: 30),
 
-              // --- ANALYTICS SECTION ---
+              // ── ANALYTICS SECTION ──
               const Text(
                 "Analytics & Recent Activity",
                 style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 10),
 
-              // --- ENTERPRISE THREAT TREND CARD CONTAINER ---
               Container(
                 padding: const EdgeInsets.all(20),
                 decoration: BoxDecoration(
@@ -510,17 +511,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
               ),
               const SizedBox(height: 25),
 
-              // --- RECENT ALERTS ---
-              // Locate this block at the very bottom of lib/screens/dashboard_screen.dart
+              // ── RECENT ALERTS ──
               const Text(
                 "Recent Alerts",
                 style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 10),
-              if (_alerts.isEmpty)
-                const Text("No alerts detected"),
+              if (_alerts.isEmpty) const Text("No alerts detected"),
 
-              // ── WRAPPING EACH ALERTTILE WITH TACTILE NAV INTERACTION ──
               ..._alerts.map(
                     (alert) => GestureDetector(
                   onTap: () {
@@ -532,7 +530,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     );
                   },
                   child: AlertTile(
-                    title: alert["title"] ?? alert["message"], // Handles both title layouts safely
+                    title: alert["title"] ?? alert["message"],
                     risk: alert["severity"],
                   ),
                 ),

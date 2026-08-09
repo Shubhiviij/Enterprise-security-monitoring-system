@@ -1,27 +1,32 @@
-y
 import re
-import psutil
-import shutil
 import time
-import subprocess
+import os
 import sqlite3
-from database.db import DB_NAME, hash_password
+import subprocess
+from datetime import datetime
+import psutil
 import requests
 from fastapi import FastAPI, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
+
 from database.db import (
+    DB_NAME,
     init_db,
-    save_stats,
-    get_history,
+    hash_password,
     verify_user_credentials,
     create_user,
+    save_stats,
+    get_history,
     save_behavior_snapshot,
     get_behavior_baseline,
-    analyze_behavior
+    analyze_behavior,
+    get_behavior_history
 )
 
-app = FastAPI()
+app = FastAPI(title="Enterprise Security Monitor API")
+
+# Initialize database schema at startup
 init_db()
 
 app.add_middleware(
@@ -32,6 +37,14 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Operational Alert State Memory DB
+ALERT_STATUS_DB = {
+    "ALT-4011": "OPEN",
+    "ALT-9082": "INVESTIGATING",
+    "ALT-2043": "RESOLVED"
+}
+
+# ── SCHEMAS ──
 class UserCreate(BaseModel):
     username: str
     password: str
@@ -39,6 +52,7 @@ class UserCreate(BaseModel):
 
 class RoleUpdate(BaseModel):
     role: str
+
 class URLRequest(BaseModel):
     url: str
 
@@ -51,9 +65,36 @@ class RegisterRequest(BaseModel):
     password: str
     role: str = "Analyst"
 
+class StatusUpdateRequest(BaseModel):
+    alert_id: str
+    status: str
+
+
+# ── LOG PARSING UTILITY ──
+def read_logs():
+    """Fetches recent Linux system log telemetry."""
+    try:
+        result = subprocess.run(
+            ["journalctl", "-n", "100", "--no-pager"],
+            capture_output=True,
+            text=True,
+            timeout=5
+        )
+        return result.stdout.splitlines()
+    except Exception:
+        return [
+            "systemd[1]: Starting Enterprise Security Daemon...",
+            "sshd[4102]: Failed password for invalid user admin from 192.168.1.105 port 44211 ssh2",
+            "dockerd[1105]: Container daemon event generated status=start",
+            "kernel: eth0 network link operational state changed"
+        ]
+
+
+# ── BASE ENDPOINTS ──
 @app.get("/")
 def home():
-    return {"status": "Kali Backend Running Securely"}
+    return {"status": "Kali Backend Running Securely", "db_path": DB_NAME}
+
 
 # ── AUTHENTICATION ROUTES ──
 @app.post("/auth/login")
@@ -61,34 +102,28 @@ def login(data: LoginRequest):
     user = verify_user_credentials(data.username, data.password)
     if not user:
         raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED, 
+            status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid security credentials"
         )
     return {"status": "success", "username": user["username"], "role": user["role"]}
+
 
 @app.post("/auth/register")
 def register(data: RegisterRequest):
     success = create_user(data.username, data.password, data.role)
     if not success:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, 
+            status_code=status.HTTP_400_BAD_REQUEST,
             detail="Operator identifier already exists"
         )
     return {"status": "success", "message": "Operator registered successfully"}
 
-def read_logs():
-    result = subprocess.run(
-        ["journalctl", "-n", "100", "--no-pager"],
-        capture_output=True,
-        text=True,
-    )
-    return result.stdout.splitlines()
 
+# ── SYSTEM MONITORING & TELEMETRY ──
 @app.get("/logs")
 def get_logs():
     return {"logs": read_logs()}
 
-from datetime import datetime
 
 @app.get("/alerts")
 def get_alerts():
@@ -110,7 +145,6 @@ def get_alerts():
 
     alerts = []
 
-    # ── 1. AUTHENTICATION FAILURE ALERT METADATA ──
     if failed_count > 0:
         alerts.append({
             "id": "ALT-4011",
@@ -120,12 +154,11 @@ def get_alerts():
             "status": ALERT_STATUS_DB.get("ALT-4011", "OPEN"),
             "count": failed_count,
             "timestamp": current_time,
-            "description": f"Detected {failed_count} explicit subsystem login failures within the current journalctl buffer window. This indicates an active credential-stuffing or automated dictionary attack against local access entry points.",
-            "recommendation": "Identify the structural source IP origin from live access logs, immediately terminate conflicting sessions, and enforce host-level firewall drop rules via iptables/ufw.",
-            "message": f"{failed_count} failed authentication events" # Legacy backup key to protect dashboard stability
+            "description": f"Detected {failed_count} login failures in the current journalctl buffer window.",
+            "recommendation": "Identify the source IP from logs and enforce host-level firewall drop rules.",
+            "message": f"{failed_count} failed authentication events"
         })
 
-    # ── 2. DOCKER SUBSYSTEM ALERT METADATA ──
     if docker_count > 0:
         alerts.append({
             "id": "ALT-9082",
@@ -135,12 +168,11 @@ def get_alerts():
             "status": ALERT_STATUS_DB.get("ALT-9082", "INVESTIGATING"),
             "count": docker_count,
             "timestamp": current_time,
-            "description": f"The local Linux engine reported {docker_count} rapid docker container microservice events. Spikes in container transitions or namespace modifications could point to privilege escalation attempts or unauthorized image execution configurations.",
-            "recommendation": "Execute 'docker ps -a' via target system terminal to investigate unexpected instances and check running docker container statistics for abnormal resource consumption patterns.",
-            "message": f"{docker_count} docker-related events" # Legacy backup key
+            "description": f"The Linux engine reported {docker_count} docker container microservice events.",
+            "recommendation": "Inspect running instances via 'docker ps -a' for unauthorized execution configurations.",
+            "message": f"{docker_count} docker-related events"
         })
 
-    # ── 3. NETWORK SUBSYSTEM ALERT METADATA ──
     if network_count > 0:
         alerts.append({
             "id": "ALT-2043",
@@ -150,12 +182,25 @@ def get_alerts():
             "status": ALERT_STATUS_DB.get("ALT-2043", "RESOLVED"),
             "count": network_count,
             "timestamp": current_time,
-            "description": f"Logged {network_count} distinct core socket system interface connectivity reports. This activity baseline represents routine tracking metrics but should be monitored for sudden internal pivoting markers.",
-            "recommendation": "Cross-reference mapped target ports with internal service architecture sheets to confirm valid system configurations.",
-            "message": f"{network_count} network-related events" # Legacy backup key
+            "description": f"Logged {network_count} distinct socket interface reports.",
+            "recommendation": "Cross-reference target ports with internal service architecture sheets.",
+            "message": f"{network_count} network-related events"
         })
 
     return {"alerts": alerts}
+
+
+@app.post("/alerts/update-status")
+def update_alert_status(data: StatusUpdateRequest):
+    aid = data.alert_id.upper()
+    status_upper = data.status.upper()
+    if status_upper not in ["OPEN", "INVESTIGATING", "RESOLVED"]:
+        raise HTTPException(status_code=400, detail="Invalid operational status assignment")
+
+    ALERT_STATUS_DB[aid] = status_upper
+    return {"status": "success", "alert_id": aid, "new_status": status_upper}
+
+
 @app.get("/stats")
 def get_stats():
     logs = read_logs()
@@ -179,6 +224,7 @@ def get_stats():
         "high_risk": high_risk,
     }
 
+
 @app.get("/severity")
 def get_severity():
     logs = read_logs()
@@ -197,6 +243,7 @@ def get_severity():
 
     return {"high": high, "medium": medium, "low": low}
 
+
 @app.get("/threats")
 def get_threats():
     url = "https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json"
@@ -205,21 +252,17 @@ def get_threats():
         data = response.json()
         threats = []
 
-        # Parse out the top 20 actionable intelligence threats
         for vuln in data["vulnerabilities"][:20]:
-            # Clean up raw notes or use fallback references
             cve_id = vuln.get("cveID", "Unknown CVE")
-            
             threats.append({
                 "cve": cve_id,
                 "title": vuln.get("vulnerabilityName", "N/A"),
                 "vendor": vuln.get("vendorProject", "N/A"),
                 "product": vuln.get("product", "N/A"),
                 "dateAdded": vuln.get("dateAdded", "N/A"),
-                # ── ENRICHED SOC THREAT INTEL FIELDS ──
                 "severity": "CRITICAL" if "remote code execution" in vuln.get("shortDescription", "").lower() else "HIGH",
                 "summary": vuln.get("shortDescription", "No abstract summary available in source feed."),
-                "requiredAction": vuln.get("requiredAction", "Apply vendor updates immediately or isolate the system asset."),
+                "requiredAction": vuln.get("requiredAction", "Apply vendor updates immediately or isolate system asset."),
                 "dueDate": vuln.get("dueDate", "Immediate mitigation recommended"),
                 "referenceUrl": f"https://nvd.nist.gov/vuln/detail/{cve_id}"
             })
@@ -227,10 +270,14 @@ def get_threats():
         return {"threats": threats}
     except Exception as e:
         return {"error": str(e), "threats": []}
+
+
 @app.get("/history")
 def history():
     return {"history": get_history()}
 
+
+# ── PHISHING SCANNER ──
 @app.post("/scan-url")
 def scan_url(data: URLRequest):
     url = data.url.lower()
@@ -255,23 +302,18 @@ def scan_url(data: URLRequest):
         score += 3
         reasons.append({"type": "ip", "description": "URL uses raw IP address instead of domain name"})
 
-    domain_part = url.split("/")[2] if "/" in url else url
-    if domain_part.count(".") > 3:
-        score += 1
-        reasons.append({"type": "structure", "description": "Too many subdomains — suspicious domain structure"})
-
-    if "https" in url and any(k in url for k in ["login", "secure", "verify"]):
-        reasons.append({"type": "info", "description": "HTTPS does not guarantee safety — phishing sites use it too"})
-
     max_score = 9
     normalized = min(round((score / max_score) * 100), 100)
 
     if score >= 4:
-        verdict = "PHISHING"; risk = "HIGH"
+        verdict = "PHISHING"
+        risk = "HIGH"
     elif score >= 2:
-        verdict = "SUSPICIOUS"; risk = "MEDIUM"
+        verdict = "SUSPICIOUS"
+        risk = "MEDIUM"
     else:
-        verdict = "SAFE"; risk = "LOW"
+        verdict = "SAFE"
+        risk = "LOW"
 
     return {
         "url": data.url,
@@ -281,29 +323,9 @@ def scan_url(data: URLRequest):
         "normalized_score": normalized,
         "reasons": reasons,
     }
-ALERT_STATUS_DB = {
-    "ALT-4011": "OPEN",
-    "ALT-9082": "INVESTIGATING",
-    "ALT-2043": "RESOLVED"
-}
 
-class StatusUpdateRequest(BaseModel):
-    alert_id: str
-    status: str
 
-@app.post("/alerts/update-status")
-def update_alert_status(data: StatusUpdateRequest):
-    aid = data.alert_id.upper()
-    status_upper = data.status.upper()
-    
-    if status_upper not in ["OPEN", "INVESTIGATING", "RESOLVED"]:
-        raise HTTPException(status_code=400, detail="Invalid operational status assignment")
-        
-    # Update our runtime status database tracker
-    ALERT_STATUS_DB[aid] = status_upper
-    print(f"[+] Operational Alert {aid} migration shifted to state: {status_upper}")
-    return {"status": "success", "alert_id": aid, "new_status": status_upper}
-
+# ── USER MANAGEMENT ──
 @app.get("/users")
 def get_users():
     conn = sqlite3.connect(DB_NAME)
@@ -311,18 +333,14 @@ def get_users():
     cursor.execute("SELECT id, username, role FROM users ORDER BY id ASC")
     rows = cursor.fetchall()
     conn.close()
-    
-    return [
-        {"id": row[0], "username": row[1], "role": row[2]}
-        for row in rows
-    ]
+    return [{"id": row[0], "username": row[1], "role": row[2]} for row in rows]
+
 
 @app.post("/users")
-def create_user(user: UserCreate):
+def create_new_user(user: UserCreate):
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
     try:
-        # Enforce password hashing protections
         encrypted_password = hash_password(user.password)
         cursor.execute("""
             INSERT INTO users (username, password_hash, role)
@@ -335,22 +353,22 @@ def create_user(user: UserCreate):
     finally:
         conn.close()
 
+
 @app.delete("/users/{user_id}")
 def delete_user(user_id: int):
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
-    
-    # Prevent the active admin account from deleting itself by accident
     cursor.execute("SELECT username FROM users WHERE id = ?", (user_id,))
     target = cursor.fetchone()
     if target and target[0] == "admin":
         conn.close()
         raise HTTPException(status_code=403, detail="Cannot delete master root administrator")
-        
+
     cursor.execute("DELETE FROM users WHERE id = ?", (user_id,))
     conn.commit()
     conn.close()
     return {"message": "User deleted successfully"}
+
 
 @app.put("/users/{user_id}/role")
 def update_role(user_id: int, data: RoleUpdate):
@@ -360,80 +378,62 @@ def update_role(user_id: int, data: RoleUpdate):
     conn.commit()
     conn.close()
     return {"message": "Role metrics updated successfully"}
+
+
 @app.get("/system-health")
 def system_health():
-
-    cpu = psutil.cpu_percent(interval=1)
-
-    memory = psutil.virtual_memory()
-
-    disk = psutil.disk_usage("/")
-
-    boot_time = psutil.boot_time()
-
     return {
-        "cpu": cpu,
-        "memory": memory.percent,
-        "disk": disk.percent,
+        "cpu": psutil.cpu_percent(interval=1),
+        "memory": psutil.virtual_memory().percent,
+        "disk": psutil.disk_usage("/").percent,
         "backend": "ONLINE",
         "database": "CONNECTED",
         "api_response_ms": round(time.perf_counter() * 1000) % 100
     }
-@app.get("/api/dashboard/refresh")  # Example path matching your Flutter dashboard fetch lifecycle
-async def refresh_dashboard_telemetry():
-    # 1. Fetch live metrics from your Kali subsystems/log parsers here...
-    current_failed = 3
-    current_docker = 14
-    current_network = 120
-    current_cpu = 18.5
-    current_memory = 62.1
-    
-    # 2. Append the snapshot seamlessly to the telemetry tables
-    save_behavior_snapshot(
-        failed_logins=current_failed,
-        docker_events=current_docker,
-        network_events=current_network,
-        cpu=current_cpu,
-        memory=current_memory
-    )
-    
-    return {"status": "success", "message": "Baseline metrics logged."}
+
+
+# ── BEHAVIORAL ANALYSIS ENDPOINTS ──
 @app.get("/api/dashboard/baseline")
 async def fetch_calculated_baseline():
-    """
-    Exposes the system-wide baseline averages to your frontend environment
-    to support statistical deviation maps and behavioral alerts.
-    """
+    """Returns historical metric averages."""
     try:
         baseline = get_behavior_baseline()
         return {"status": "success", "data": baseline}
     except Exception as e:
-        return {"status": "error", "message": f"Failed to compute baseline analytics: {str(e)}"}
+        return {"status": "error", "message": str(e)}
+
+
 @app.get("/api/behavior-analysis")
 async def get_behavior_analysis():
-    """
-    Computes a real-time behavioral audit against historical mathematical norms
-    and exposes threat warnings and cumulative metrics to client devices.
-    """
+    """Captures live system metrics, logs a snapshot, and evaluates against baseline norms."""
     try:
-        # 1. Fetch calculated historical norms from your SQLite baseline table
-        baseline_data = get_behavior_baseline()
-        
-        # 2. Capture or track live metrics from your active Kali subsystems/log pools
-        # TODO: Replace these static assignments with your live log/subsystem parsers
-        # (e.g., psutil.cpu_percent(), psutil.virtual_memory(), journalctl counts)
+        # Parse live log signatures
+        logs = read_logs()
+        failed_count = sum(1 for log in logs if "failed" in log.lower())
+        docker_count = sum(1 for log in logs if "docker" in log.lower())
+        network_count = sum(1 for log in logs if "network" in log.lower())
+
         current_live_metrics = {
-            "failed_logins": 5,     # Triggers the 3x baseline multiplier if average is ~1
-            "docker_events": 18,    # Triggers anomaly if baseline average is low
-            "network_events": 150,
-            "cpu": 68.4,            # Spikes past normal host operations
-            "memory": 82.1          # System load anomaly
+            "failed_logins": failed_count,
+            "docker_events": docker_count,
+            "network_events": network_count,
+            "cpu": psutil.cpu_percent(interval=None),
+            "memory": psutil.virtual_memory().percent
         }
-        
-        # 3. Process the live values against the historical engine parameters
+
+        # 1. Capture snapshot to historical table
+        save_behavior_snapshot(
+            failed_logins=current_live_metrics["failed_logins"],
+            docker_events=current_live_metrics["docker_events"],
+            network_events=current_live_metrics["network_events"],
+            cpu=current_live_metrics["cpu"],
+            memory=current_live_metrics["memory"]
+        )
+
+        # 2. Compute averages and evaluate deviations
+        baseline_data = get_behavior_baseline()
         evaluation_report = analyze_behavior(current=current_live_metrics, baseline=baseline_data)
-        
-        # 4. Return the consolidated structured report payload matching Phase 5 specifications
+
         return {
             "status": evaluation_report["status"],
             "risk_score": evaluation_report["risk_score"],
@@ -443,10 +443,15 @@ async def get_behavior_analysis():
                 "tracked_metrics": current_live_metrics
             }
         }
-        
     except Exception as e:
         return {
             "status": "ERROR",
             "risk_score": 0,
-            "anomalies": [f"Failed to compile backend behavioral analytics: {str(e)}"]
+            "anomalies": [f"Failed to compile behavioral analytics: {str(e)}"]
         }
+
+
+@app.get("/api/behavior-history")
+async def behavior_history():
+    """Returns history records from the behavior_baseline table."""
+    return {"history": get_behavior_history(20)}

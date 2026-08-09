@@ -194,6 +194,81 @@ class _BehaviorAnalysisScreenState extends State<BehaviorAnalysisScreen> {
       }).toList(),
     );
   }
+  Widget _buildRecommendations() {
+    final anomalies = data?["anomalies"] ?? [];
+    final status = (data?["status"] ?? "NORMAL").toString().toUpperCase();
+
+    List<String> recommendations = [];
+
+    if (anomalies.isEmpty) {
+      recommendations = [
+        "Continue monitoring system behavior.",
+        "Review authentication activity periodically.",
+        "Monitor Docker container activity for unexpected changes.",
+        "Continue tracking CPU and memory utilization.",
+      ];
+    } else {
+      recommendations.add(
+          "Investigate the detected behavioral anomalies."
+      );
+
+      if (status == "HIGH") {
+        recommendations.add(
+            "Perform immediate investigation of affected system activity."
+        );
+      }
+
+      recommendations.add(
+          "Review recent authentication and system logs."
+      );
+
+      recommendations.add(
+          "Verify active Docker containers and running processes."
+      );
+
+      recommendations.add(
+          "Monitor network activity for unusual connections."
+      );
+    }
+
+    return Card(
+      elevation: 2,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          children: recommendations.map((recommendation) {
+            return Padding(
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Icon(
+                    Icons.check_circle_outline,
+                    color: Colors.blueGrey,
+                    size: 22,
+                  ),
+
+                  const SizedBox(width: 12),
+
+                  Expanded(
+                    child: Text(
+                      recommendation,
+                      style: const TextStyle(
+                        fontSize: 14,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          }).toList(),
+        ),
+      ),
+    );
+  }
 
   Widget _buildBody() {
     if (isLoading) {
@@ -322,6 +397,22 @@ class _BehaviorAnalysisScreenState extends State<BehaviorAnalysisScreen> {
           const SizedBox(height: 12),
 
           _buildAnomaliesSection(),
+          const SizedBox(height: 24),
+
+          const Align(
+            alignment: Alignment.centerLeft,
+            child: Text(
+              "Security Recommendations",
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+
+          const SizedBox(height: 12),
+
+          _buildRecommendations(),
           const SizedBox(height: 12),
 
           // Anomalies Ingestion Directory Feed
