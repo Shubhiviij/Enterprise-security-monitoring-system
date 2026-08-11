@@ -163,5 +163,33 @@ class ApiService {
 
     throw Exception("Failed to fetch behavioral analysis");
   }
+  static Future<List<Map<String, dynamic>>> getBehaviorHistory() async {
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl/api/behavior-history'),
+      );
 
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+
+        final history = data['history'];
+
+        if (history is List) {
+          return history
+              .map((item) => Map<String, dynamic>.from(item))
+              .toList();
+        }
+      }
+
+      print(
+        'Behavior history request failed: '
+            '${response.statusCode} ${response.body}',
+      );
+
+      return [];
+    } catch (e) {
+      print('Behavior history error: $e');
+      return [];
+    }
+  }
 }

@@ -14,6 +14,7 @@ import '../widgets/behavior_analysis_card.dart';
 import '../widgets/severity_card.dart';
 import '../widgets/stat_card.dart';
 import '../widgets/threat_trend_chart.dart';
+import '../widgets/behavior_history_chart.dart';
 
 // Screens
 import 'alert_details_screen.dart';
@@ -24,6 +25,7 @@ import 'login_screen.dart';
 import 'phishing_scanner_screen.dart';
 import 'threat_intel_screen.dart';
 import 'user_management_screen.dart';
+
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -39,6 +41,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
   List<dynamic> _alerts = [];
   List<dynamic> _threats = [];
   BehaviorAnalysis? _behaviorAnalysis;
+  List<Map<String, dynamic>> _behaviorHistory = [];
+  bool _behaviorHistoryLoading = true;
 
   // Operational State Flags
   bool _isLoading = true;
@@ -54,6 +58,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     super.initState();
     // Consolidated single initialization pass
     _fetchData(isInitialLoad: true);
+    _loadBehaviorHistory();
 
     // Polls background data smoothly every 5 seconds
     _timer = Timer.periodic(
@@ -144,6 +149,27 @@ class _DashboardScreenState extends State<DashboardScreen> {
         ],
       ),
     );
+  }
+  Future<void> _loadBehaviorHistory() async {
+    try {
+      final history = await ApiService.getBehaviorHistory();
+
+      if (!mounted) return;
+
+      setState(() {
+        _behaviorHistory = history;
+        _behaviorHistoryLoading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+
+      setState(() {
+        _behaviorHistory = [];
+        _behaviorHistoryLoading = false;
+      });
+
+      print('Failed to load behavior history: $e');
+    }
   }
 
   @override
@@ -404,6 +430,17 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 ),
                 const SizedBox(height: 20),
               ],
+              const SizedBox(height: 24),
+
+              _behaviorHistoryLoading
+                  ? const Center(
+                child: CircularProgressIndicator(),
+              )
+                  : BehaviorHistoryChart(
+                history: _behaviorHistory,
+              ),
+
+              const SizedBox(height: 24),
 
               // ── STATS GRID ──
               GridView.count(
