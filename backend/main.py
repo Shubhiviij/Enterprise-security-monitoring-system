@@ -6,6 +6,7 @@ import subprocess
 from datetime import datetime
 import psutil
 import requests
+import asyncio
 from fastapi import FastAPI, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -28,6 +29,9 @@ app = FastAPI(title="Enterprise Security Monitor API")
 
 # Initialize database schema at startup
 init_db()
+@app.on_event("startup")
+async def startup_behavior_monitor():
+    asyncio.create_task(behavior_snapshot_worker())
 
 app.add_middleware(
     CORSMiddleware,
@@ -88,6 +92,52 @@ def read_logs():
             "dockerd[1105]: Container daemon event generated status=start",
             "kernel: eth0 network link operational state changed"
         ]
+async def behavior_snapshot_worker():
+    """Automatically captures system behavior every 60 seconds."""
+
+    while True:
+        try:
+            logs = read_logs()
+
+            failed_count = sum(
+                1 for log in logs
+                if "failed" in log.lower()
+            )
+
+            docker_count = sum(
+                1 for log in logs
+                if "docker" in log.lower()
+            )
+
+            network_count = sum(
+                1 for log in logs
+                if "network" in log.lower()
+            )
+
+            cpu = psutil.cpu_percent(interval=None)
+            memory = psutil.virtual_memory().percent
+
+            save_behavior_snapshot(
+                failed_logins=failed_count,
+                docker_events=docker_count,
+                network_events=network_count,
+                cpu=cpu,
+                memory=memory
+            )
+
+            print(
+                f"[BEHAVIOR] Snapshot saved | "
+                f"Failed={failed_count} | "
+                f"Docker={docker_count} | "
+                f"Network={network_count} | "
+                f"CPU={cpu}% | "
+                f"Memory={memory}%"
+            )
+
+        except Exception as e:
+            print(f"[BEHAVIOR] Snapshot error: {e}")
+
+        await asyncio.sleep(60)
 
 
 # ── BASE ENDPOINTS ──
@@ -421,16 +471,7 @@ async def get_behavior_analysis():
             "memory": psutil.virtual_memory().percent
         }
 
-        # 1. Capture snapshot to historical table
-        save_behavior_snapshot(
-            failed_logins=current_live_metrics["failed_logins"],
-            docker_events=current_live_metrics["docker_events"],
-            network_events=current_live_metrics["network_events"],
-            cpu=current_live_metrics["cpu"],
-            memory=current_live_metrics["memory"]
-        )
-
-        # 2. Compute averages and evaluate deviations
+        # 1. Compute averages and evaluate deviations
         baseline_data = get_behavior_baseline()
         evaluation_report = analyze_behavior(current=current_live_metrics, baseline=baseline_data)
 

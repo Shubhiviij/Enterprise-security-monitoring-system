@@ -1,4 +1,7 @@
 import os
+from dotenv import load_dotenv
+
+load_dotenv()
 import sqlite3
 from datetime import datetime
 import bcrypt
@@ -66,7 +69,12 @@ def init_db():
 
     cursor.execute("SELECT * FROM users WHERE username = ?", ("admin",))
     if not cursor.fetchone():
-        default_hash = hash_password("admin123")
+        default_password = os.getenv("DEFAULT_ADMIN_PASSWORD")
+
+    if not default_password:
+       raise RuntimeError("DEFAULT_ADMIN_PASSWORD is not configured")
+
+    default_hash = hash_password(default_password)
         cursor.execute(
             "INSERT INTO users (username, password_hash, role) VALUES (?, ?, ?)",
             ("admin", default_hash, "Administrator")
@@ -296,4 +304,3 @@ def analyze_behavior(current: dict, baseline: dict) -> dict:
         "risk_score": min(risk_score, 100),
         "anomalies": anomalies,
     }
-          
