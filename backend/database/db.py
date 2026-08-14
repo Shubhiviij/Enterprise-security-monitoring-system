@@ -9,7 +9,7 @@ import bcrypt
 # ── DYNAMIC ABSOLUTE PATH BINDING ──
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_NAME = os.path.join(BASE_DIR, "threat_history.db")
-
+ALLOWED_ROLES = {"Administrator", "Analyst", "User"}
 
 # ── NATIVE HASHING FUNCTIONS ──
 def hash_password(password: str) -> str:
@@ -71,14 +71,16 @@ def init_db():
     if not cursor.fetchone():
         default_password = os.getenv("DEFAULT_ADMIN_PASSWORD")
 
-    if not default_password:
-       raise RuntimeError("DEFAULT_ADMIN_PASSWORD is not configured")
+        if not default_password:
+            raise RuntimeError("DEFAULT_ADMIN_PASSWORD is not configured")
 
-    default_hash = hash_password(default_password)
+        default_hash = hash_password(default_password)
+
         cursor.execute(
             "INSERT INTO users (username, password_hash, role) VALUES (?, ?, ?)",
             ("admin", default_hash, "Administrator")
         )
+
         print(f"[+] Default admin account initialized in {DB_NAME}.")
 
     conn.commit()
@@ -88,21 +90,35 @@ def init_db():
 # ── USER MANAGEMENT FUNCTIONS ──
 def create_user(username: str, plain_password: str, role: str = "Analyst") -> bool:
     """Creates a new operator with hashed credentials."""
+
+    username = username.strip().lower()
+    role = role.strip()
+
+    if not username or not plain_password:
+        return False
+
+    if role not in ALLOWED_ROLES:
+        return False
+
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
+
     try:
         password_hash = hash_password(plain_password)
+
         cursor.execute(
             "INSERT INTO users (username, password_hash, role) VALUES (?, ?, ?)",
-            (username.lower().strip(), password_hash, role)
+            (username, password_hash, role)
         )
+
         conn.commit()
         return True
+
     except sqlite3.IntegrityError:
         return False
+
     finally:
         conn.close()
-
 
 def verify_user_credentials(username: str, plain_password: str):
     """Validates operator login credentials."""
