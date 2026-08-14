@@ -33,14 +33,18 @@ init_db()
 async def startup_behavior_monitor():
     asyncio.create_task(behavior_snapshot_worker())
 
+FRONTEND_ORIGINS = os.getenv(
+    "FRONTEND_ORIGINS",
+    "http://localhost:5619"
+).split(",")
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[origin.strip() for origin in FRONTEND_ORIGINS],
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_headers=["Content-Type", "Authorization"],
 )
-
 # Operational Alert State Memory DB
 ALERT_STATUS_DB = {
     "ALT-4011": "OPEN",
