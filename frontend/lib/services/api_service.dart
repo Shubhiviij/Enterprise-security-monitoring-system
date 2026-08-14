@@ -4,35 +4,61 @@ import 'package:http/http.dart' as http;
 class ApiService {
   static const String baseUrl = "http://192.168.115.129:8000";
 
-  static Future<Map<String, dynamic>?> login(String username, String password) async {
+  // ─────────────────────────────────────────────
+  // AUTHENTICATION
+  // ─────────────────────────────────────────────
+
+  static Future<Map<String, dynamic>?> login(
+      String username, String password) async {
     try {
       final response = await http.post(
         Uri.parse("$baseUrl/auth/login"),
-        headers: {"Content-Type": "application/json"},
-        body: jsonEncode({"username": username, "password": password}),
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: jsonEncode({
+          "username": username,
+          "password": password,
+        }),
       );
       if (response.statusCode == 200) {
-        return jsonDecode(response.body);
+        final data = jsonDecode(response.body);
+
+        return Map<String, dynamic>.from(data);
       }
+
+      print("LOGIN FAILED: ${response.statusCode}");
       return null;
     } catch (e) {
-      print("Auth connection crash: $e");
+      print("Authentication connection error: $e");
       return null;
     }
   }
 
+  // ─────────────────────────────────────────────
+  // LIVE LOGS
+  // ─────────────────────────────────────────────
+
   static Future<List<String>> getLogs() async {
     try {
-      final response = await http.get(Uri.parse("$baseUrl/logs"));
+      final response = await http.get(
+        Uri.parse("$baseUrl/logs"),
+      );
+
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
+
         return List<String>.from(data["logs"]);
       }
+
+      print("GET LOGS FAILED: ${response.statusCode}");
       return [];
     } catch (e) {
+      print("Logs connection error: $e");
       return [];
     }
   }
+
 
   static Future<List<dynamic>> getAlerts() async {
     try {
