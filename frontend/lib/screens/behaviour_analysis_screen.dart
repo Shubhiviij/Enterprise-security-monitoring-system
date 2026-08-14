@@ -37,7 +37,6 @@ class _BehaviorAnalysisScreenState extends State<BehaviorAnalysisScreen> {
         });
       }
     }
-    final metrics = data!["meta"]["tracked_metrics"];
   }
 
 

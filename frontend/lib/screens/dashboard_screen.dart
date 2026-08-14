@@ -101,10 +101,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
         _alerts = (results[2] as List<dynamic>?) ?? [];
         _threats = (results[3] as List<dynamic>?) ?? [];
 
-        // Parse Behavior Analysis Object safely
-        if (results[4] != null) {
-          _behaviorAnalysis = BehaviorAnalysis.fromJson(results[4] as Map<String, dynamic>);
-        }
+        // Parse Behavior Analysis Object
+        _behaviorAnalysis = BehaviorAnalysis.fromJson(
+          results[4] as Map<String, dynamic>,
+        );
 
         _errorMessage = null;
         _isLoading = false;
