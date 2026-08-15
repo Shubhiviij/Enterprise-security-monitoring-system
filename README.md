@@ -1118,13 +1118,3 @@ The Enterprise Security Monitor provides a modular foundation for centralized en
 By combining Linux telemetry, rule-based event detection, behavioral baseline analysis, threat intelligence, phishing analysis, RBAC, system-health monitoring, and a Flutter security dashboard, the system demonstrates the core workflow of a lightweight Security Operations Center monitoring platform.
 
 The architecture is intentionally designed to support future integration of machine-learning and AI-based cybersecurity capabilities while retaining transparent and interpretable security controls.
-
----
-
-## Author
-
-**Shubhi Vijayvergiya**
-
-B.Tech — Computer Science and Engineering
-
-Developed as part of cybersecurity research and development work focused on **Cybersecurity for Enterprise Systems**.
